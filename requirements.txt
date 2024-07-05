@@ -1,0 +1,6 @@
+python-dotenv
+streamlit
+langchain
+boto3
+wasabi
+tiktoken
