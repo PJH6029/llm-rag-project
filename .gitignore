@@ -7,3 +7,4 @@ venv*
 .cache
 .vscode
 queries.txt
+ref_docs/*

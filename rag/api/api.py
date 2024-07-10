@@ -8,7 +8,8 @@ from rag.types import *
 
 manager: RAGManager = None
 
-recent_chunks = None
+recent_base_docs = None
+recent_additional_docs = None
 
 def _init():
     load_dotenv()
@@ -29,13 +30,15 @@ def query():
     pass
 
 def query_stream(query: str, history: list[dict]=None):
-    msg.info(f"Querying with: {query}")
-    chunks, context = manager.retrieve_chunks([query])
+    msg.info(f"Querying with: {query} and {len(history)} history...")
+    base_chunks, additional_chunks, context = manager.retrieve_chunks([query], history=history, revise_query=True)
     for response in manager.generate_stream_answer([query], context, history):
         yield response
         # TODO fact verification
-    global recent_chunks
-    recent_chunks = manager.combine_chunks(chunks)
+    
+    global recent_base_docs, recent_additional_docs
+    recent_base_docs = manager.combine_chunks(base_chunks)
+    recent_additional_docs = manager.combine_chunks(additional_chunks)
     msg.good(f"Query completed")
 
 def index_document(file: FileData):

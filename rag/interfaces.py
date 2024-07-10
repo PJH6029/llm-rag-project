@@ -4,7 +4,7 @@ from wasabi import msg
 from typing import Iterator
 
 from rag.types import *
-
+from langchain.prompts import ChatPromptTemplate
 
 
 class Component:
@@ -39,31 +39,31 @@ class Retriever(Component):
     def __init__(self) -> None:
         super().__init__()
 
-    def retrieve(self, queries: list[str], embedder: Embedder) -> tuple[list[Chunk], str]:
+    def retrieve(self, query: str, embedder: Embedder, top_k: int=5) -> dict[str, list[Chunk]]:
         raise NotImplementedError()
-    
-    def cutoff_text(self, text: str, content_length: int) -> str:
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
-
-        encoded_tokens = encoding.encode(text, disallowed_special=())
-
-        if len(encoded_tokens) > content_length:
-            truncated_tokens = encoded_tokens[:content_length]
-            truncated_text = encoding.decode(truncated_tokens)
-            msg.info(f"Truncated text from {len(encoded_tokens)} tokens to {len(truncated_tokens)} tokens")
-            return truncated_text
-        else:
-            msg.info(f"Text has {len(encoded_tokens)} tokens, not truncating")
-            return text
 
 
 class Generator(Component):
     def __init__(self) -> None:
         super().__init__()
+        self.prompt = None
+        self.model_name = ""
+        self.context_window = 0
 
-    def generate(self, queries: list[str], context: str, history_str: str="No history") -> list[str]:
+    def generate(self, queries: list[str], context: str, history: list[dict]) -> list[str]:
         raise NotImplementedError()
     
     # TODO async
-    def generate_stream(self, queries: list[str], context: str, history_str: str="No history") -> Iterator[str]:
+    def generate_stream(self, queries: list[str], context: dict[str, str], history: list[dict]) -> Iterator[str]:
+        raise NotImplementedError()
+
+
+class Revisor(Component):
+    def __init__(self) -> None:
+        super().__init__()
+        self.prompt = None
+        self.model_name = ""
+        self.context_window = 0
+
+    def revise(self, queries: list[str], history: list[dict], revise_prompt: ChatPromptTemplate=None) -> list[str]:
         raise NotImplementedError()

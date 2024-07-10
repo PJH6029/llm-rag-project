@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+from pprint import pprint
 from wasabi import msg
 
 from rag.interfaces import Embedder, Retriever
@@ -11,69 +12,84 @@ load_dotenv()
 class KendraRetriever(Retriever):
     def __init__(self) -> None:
         super().__init__()
-        self.top_k = 5
 
-    def retrieve(self, queries: list[str], embedder: Embedder) -> tuple[list[Chunk], str]:
+    def retrieve(self, query: list[str], embedder: Embedder, top_k: int=5) -> dict[str, list[Chunk]]:
         kendraRetriever = AmazonKendraRetriever(
             index_id=os.environ["KENDRA_INDEX_ID"],
             region_name=os.environ["AWS_REGION"],
-            top_k=self.top_k
+            top_k=top_k,
         )
-        msg.info("Kendra Retriever initialized. Retrieving chunks...")
-        chunks = []
-        for query in queries:
-            retrieved_chunks = kendraRetriever.invoke(query)
-            for chunk_raw in retrieved_chunks:
-                doc_type = chunk_raw.metadata["title"].split(".")[-1] # TODO
-                meta = self.process_metadata(chunk_raw.metadata)
-                chunk = Chunk(
-                    text=chunk_raw.metadata["excerpt"],
-                    doc_name=chunk_raw.metadata["title"],
-                    doc_type=doc_type,
-                    doc_id=chunk_raw.metadata["document_id"],
-                    chunk_id=chunk_raw.metadata["result_id"],
-                    meta=meta,
-                )
-                score = 5 if chunk_raw.metadata["score"] == "HIGH" else 3 if chunk_raw.metadata["score"] == "MEDIUM" else 1
-                chunk.score = score
+        msg.info("KendraRetriever initialized.")
 
-                chunks.append(chunk)
-        
-        sorted_chunks = sorted(chunks, key=lambda x: x.score, reverse=True)
-        context = self.combine_context(chunks)
-        return sorted_chunks, context
+        # base-context-retrieval
+        msg.info("Retrieving base context...")
+        attribute_filter = {
+            "EqualsTo": {
+                "Key": "_category",
+                "Value": {
+                    "StringValue": "base",
+                },
+            }
+        }
+        kendraRetriever.attribute_filter = attribute_filter
+        retrieved_base_chunks_raw = kendraRetriever.invoke(query)
+        retrieved_base_chunks = [self.process_chunk(chunk_raw, "base") for chunk_raw in retrieved_base_chunks_raw]
+        msg.good(f"Retrieved {len(retrieved_base_chunks)} base chunks.")
+
+        base_doc_ids = set([chunk.doc_id for chunk in retrieved_base_chunks])
+        msg.info(f"Retrieved base doc ids: {base_doc_ids}")
+
+        # additional-context-retrieval
+        retrieved_additional_chunks = []
+        for base_doc_id in base_doc_ids:
+            msg.info(f"Retrieving additional context for base doc id: {base_doc_id}...")
+            attribute_filter = {
+                "EqualsTo": {
+                    "Key": "_category",
+                    "Value": {
+                        "StringValue": "additional",
+                    },
+                },
+                "EqualsTo": {
+                    "Key": "base-doc-id",
+                    "Value": {
+                        "StringValue": base_doc_id,
+                    }
+                }
+            }
+            kendraRetriever.attribute_filter = attribute_filter
+            retrieved_additional_chunks_raw = kendraRetriever.invoke(query)
+            retrieved_chunks = [self.process_chunk(chunk_raw, "additional") for chunk_raw in retrieved_additional_chunks_raw]
+            retrieved_additional_chunks.extend(retrieved_chunks)
+            msg.good(f"Retrieved {len(retrieved_chunks)} additional chunks")
+            
+        return {"base": retrieved_base_chunks, "additional": retrieved_additional_chunks}
+
+    def process_chunk(self, chunk_raw: dict, doc_type: str) -> Chunk:
+        doc_meta, chunk_meta = self.process_metadata(chunk_raw.metadata, doc_type)
+        chunk = Chunk(
+            text=chunk_raw.metadata["excerpt"],
+            doc_id=chunk_raw.metadata["document_id"],
+            chunk_id=chunk_raw.metadata["result_id"],
+            doc_meta=doc_meta,
+            chunk_meta=chunk_meta,
+        )
+        score = 1 if chunk.chunk_meta["score"] == "HIGH" else 0.5 if chunk.chunk_meta["score"] == "MEDIUM" else 1
+        chunk.score = score
+        return chunk
     
-    def process_metadata(self, metadata: dict) -> dict:
-        processed_metadata = {
+    def process_metadata(self, metadata: dict, doc_type: str) -> dict:
+        doc_meta = {
+            "doc_name": metadata.get("title", ""),
+            "doc_type": doc_type, # base or additional
+            "version": metadata.get("document_attributes", {}).get("version", ""),
+            "uri": metadata.get("document_attributes", {}).get("_source_uri", ""),
+        }
+
+        chunk_meta = {
+            "score": metadata.get("score", ""),
             "excerpt_page_number": metadata.get("document_attributes", {}).get("_excerpt_page_number", ""),
         }
-        return processed_metadata
-    
-    def combine_chunks(self, chunks: list[Chunk]) -> dict:
-        docs = {}
-        for chunk in chunks:
-            if chunk.doc_id not in docs:
-                docs[chunk.doc_id] = {"score": 0.0, "chunks": {}, "doc_name": chunk.doc_name}
-            docs[chunk.doc_id]["score"] += float(chunk.score)
-            docs[chunk.doc_id]["chunks"][chunk.chunk_id] = chunk
-        # sort docs. preventing lost in the middle problem (see https://arxiv.org/abs/2307.03172)
-        docs = dict(sorted(docs.items(), key=lambda x: x[1]["score"], reverse=True))
-        return docs
-    
-    def combine_context(self, chunks: list[Chunk]) -> str:
-        docs = self.combine_chunks(chunks)
-        context = ""
-        
-        docs = dict(list(docs.items())[:self.top_k])
-
-        for doc_id in docs:
-            # sort chunk by scores
-            sorted_chunks = list(sorted(docs[doc_id]["chunks"].values(), key=lambda chunk: chunk.score, reverse=True))
-
-            context += f"--- Document: {docs[doc_id]['doc_name']} ---\n\n"
-
-            for chunk in sorted_chunks:
-                context += f"{chunk.to_detailed_str()}\n\n"
-            
-        return context
-    
+        if doc_type == "additional":
+            chunk_meta["base_doc_id"] = metadata.get("document_attributes", {}).get("base-doc-id", "")
+        return doc_meta, chunk_meta
