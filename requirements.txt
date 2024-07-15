@@ -1,6 +1,9 @@
 python-dotenv
 streamlit
 langchain
+langchain-community
+langchain-openai
+langchain-core
 boto3
 wasabi
 tiktoken
