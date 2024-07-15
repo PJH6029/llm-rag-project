@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 from wasabi import msg
 
 from langchain_core.output_parsers import StrOutputParser
@@ -8,8 +7,6 @@ from langchain.prompts import ChatPromptTemplate
 from rag.interfaces import Revisor
 from rag.prompts import revision_prompt
 from rag import utils
-
-load_dotenv()
 
 class GPTRevisor(Revisor):
     def __init__(self) -> None:

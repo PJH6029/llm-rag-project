@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 import os
 from wasabi import msg
 from pprint import pprint
@@ -7,8 +6,6 @@ from rag.interfaces import Embedder, Retriever
 from rag.types import *
 
 from langchain_community.retrievers import AmazonKnowledgeBasesRetriever
-load_dotenv()
-
 class RetrievalConfig:
     def __init__(self, config: dict) -> None:
         self._config = config

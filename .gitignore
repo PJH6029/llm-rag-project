@@ -11,3 +11,4 @@ ref_docs/*
 evaluate/evaluation/*
 evaluate/experiment/*
 evaluate/reference/*
+.streamlit/secrets.toml

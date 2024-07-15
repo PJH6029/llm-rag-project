@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 import os
 from wasabi import msg
 
@@ -12,7 +11,7 @@ recent_base_docs = None
 recent_additional_docs = None
 
 def init(config: dict=None):
-    load_dotenv()
+    utils.load_secrets()
     global manager
     manager = RAGManager()
     # config = utils.load_config()

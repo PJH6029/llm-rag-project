@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 import os
 from pprint import pprint
 from wasabi import msg
@@ -7,8 +6,6 @@ from rag.interfaces import Embedder, Retriever
 from rag.types import *
 
 from langchain_community.retrievers import AmazonKendraRetriever
-load_dotenv()
-
 class KendraRetriever(Retriever):
     def __init__(self) -> None:
         super().__init__()

@@ -1,11 +1,8 @@
 import os
-from dotenv import load_dotenv
 from wasabi import msg
 
 from rag.generate.GPT4Generator import GPT4Generator
 from rag.prompts import generation_prompt
-
-load_dotenv()
 
 class GPT3Generator(GPT4Generator):
     def __init__(self) -> None:

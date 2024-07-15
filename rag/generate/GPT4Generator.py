@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 from wasabi import msg
 
 from langchain_core.output_parsers import StrOutputParser
@@ -7,8 +6,6 @@ from langchain_core.output_parsers import StrOutputParser
 from rag.interfaces import Generator
 from rag.prompts import generation_prompt_v2
 from rag import utils
-
-load_dotenv()
 
 class GPT4Generator(Generator):
     def __init__(self) -> None:

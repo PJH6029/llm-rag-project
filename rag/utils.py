@@ -1,6 +1,24 @@
 import tiktoken
 import boto3
 from rag.types import *
+import streamlit as st
+import os
+from wasabi import msg
+
+def load_secrets():
+    msg.info("Loading secrets...")
+    keys = {
+        "UPSTAGE_API_KEY",
+        "OPENAI_API_KEY",
+        "AWS_REGION",
+        "KENDRA_INDEX_ID",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "S3_BUCKET_NAME",
+        "KNOWLEDGE_BASE_ID",
+    }
+    for key in keys:
+        os.environ[key] = st.secrets[key]
 
 def load_config():
     return {}
