@@ -13,16 +13,20 @@ class KendraRetriever(Retriever):
     def __init__(self) -> None:
         super().__init__()
 
-    def retrieve(self, query: list[str], embedder: Embedder, top_k: int=5) -> dict[str, list[Chunk]]:
+    def retrieve(self, query: str, embedder: Embedder, top_k: int=5, category="base", base_doc_id=None) -> list[Chunk]:
         kendraRetriever = AmazonKendraRetriever(
             index_id=os.environ["KENDRA_INDEX_ID"],
             region_name=os.environ["AWS_REGION"],
             top_k=top_k,
         )
-        msg.info("KendraRetriever initialized.")
+        # msg.info("KendraRetriever initialized.")
 
-        # base-context-retrieval
-        msg.info("Retrieving base context...")
+        if category == "base":
+            return self._retrieve_base(kendraRetriever, query, top_k)
+        else:
+            return self._retrieve_additional(kendraRetriever, query, top_k, base_doc_id)
+
+    def _retrieve_base(self, retriever: AmazonKendraRetriever, query: str, top_k: int) -> list[Chunk]:
         attribute_filter = {
             "EqualsTo": {
                 "Key": "_category",
@@ -31,39 +35,30 @@ class KendraRetriever(Retriever):
                 },
             }
         }
-        kendraRetriever.attribute_filter = attribute_filter
-        retrieved_base_chunks_raw = kendraRetriever.invoke(query)
+        retriever.attribute_filter = attribute_filter
+        retrieved_base_chunks_raw = retriever.invoke(query)
         retrieved_base_chunks = [self.process_chunk(chunk_raw, "base") for chunk_raw in retrieved_base_chunks_raw]
-        msg.good(f"Retrieved {len(retrieved_base_chunks)} base chunks.")
-
-        base_doc_ids = set([chunk.doc_id for chunk in retrieved_base_chunks])
-        msg.info(f"Retrieved base doc ids: {base_doc_ids}")
-
-        # additional-context-retrieval
-        retrieved_additional_chunks = []
-        for base_doc_id in base_doc_ids:
-            msg.info(f"Retrieving additional context for base doc id: {base_doc_id}...")
-            attribute_filter = {
-                "EqualsTo": {
-                    "Key": "_category",
-                    "Value": {
-                        "StringValue": "additional",
-                    },
+        return retrieved_base_chunks
+    
+    def _retrieve_additional(self, retriever: AmazonKendraRetriever, query: str, top_k: int, base_doc_id: str) -> list[Chunk]:
+        attribute_filter = {
+            "EqualsTo": {
+                "Key": "_category",
+                "Value": {
+                    "StringValue": "additional",
                 },
-                "EqualsTo": {
-                    "Key": "base-doc-id",
-                    "Value": {
-                        "StringValue": base_doc_id,
-                    }
+            },
+            "EqualsTo": {
+                "Key": "base-doc-id",
+                "Value": {
+                    "StringValue": base_doc_id,
                 }
             }
-            kendraRetriever.attribute_filter = attribute_filter
-            retrieved_additional_chunks_raw = kendraRetriever.invoke(query)
-            retrieved_chunks = [self.process_chunk(chunk_raw, "additional") for chunk_raw in retrieved_additional_chunks_raw]
-            retrieved_additional_chunks.extend(retrieved_chunks)
-            msg.good(f"Retrieved {len(retrieved_chunks)} additional chunks")
-            
-        return {"base": retrieved_base_chunks, "additional": retrieved_additional_chunks}
+        }
+        retriever.attribute_filter = attribute_filter
+        retrieved_additional_chunks_raw = retriever.invoke(query)
+        retrieved_chunks = [self.process_chunk(chunk_raw, "additional") for chunk_raw in retrieved_additional_chunks_raw]
+        return retrieved_chunks
 
     def process_chunk(self, chunk_raw: dict, doc_type: str) -> Chunk:
         doc_meta, chunk_meta = self.process_metadata(chunk_raw.metadata, doc_type)

@@ -39,7 +39,7 @@ class Retriever(Component):
     def __init__(self) -> None:
         super().__init__()
 
-    def retrieve(self, query: str, embedder: Embedder, top_k: int=5) -> dict[str, list[Chunk]]:
+    def retrieve(self, query: str, embedder: Embedder, top_k: int=5, category="base", base_doc_id=None) -> list[Chunk]:
         raise NotImplementedError()
 
 

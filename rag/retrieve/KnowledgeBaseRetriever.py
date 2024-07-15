@@ -20,7 +20,7 @@ class KnowledgeBaseRetriever(Retriever):
     def __init__(self) -> None:
         super().__init__()
 
-    def retrieve(self, query: list[str], embedder: Embedder, top_k: int=5) -> dict[str, list[Chunk]]:
+    def retrieve(self, query: str, embedder: Embedder, top_k: int=5, category="base", base_doc_id=None) -> list[Chunk]:
         knowledgeBaseRetriever = AmazonKnowledgeBasesRetriever(
             knowledge_base_id=os.environ["KNOWLEDGE_BASE_ID"],
             region_name=os.environ["AWS_REGION"],
@@ -30,10 +30,14 @@ class KnowledgeBaseRetriever(Retriever):
                 }
             }
         )
-        msg.info("KnowledgeBaseRetriever initialized.")
+        # msg.info("KnowledgeBaseRetriever initialized.")
 
-        # base-context-retrieval
-        msg.info("Retrieving base context...")
+        if category == "base":
+            return self._retrieve_base(knowledgeBaseRetriever, query, top_k)
+        else:
+            return self._retrieve_additional(knowledgeBaseRetriever, query, top_k, base_doc_id)
+
+    def _retrieve_base(self, retriever: AmazonKnowledgeBasesRetriever, query: str, top_k: int) -> list[Chunk]:
         retrieval_config = {
             "vectorSearchConfiguration": {
                 "filter": {
@@ -45,40 +49,31 @@ class KnowledgeBaseRetriever(Retriever):
                 "numberOfResults": top_k,
             }
         }
-        knowledgeBaseRetriever.retrieval_config = RetrievalConfig(retrieval_config)
-        retrieved_base_chunks_raw = knowledgeBaseRetriever.invoke(query)
+        retriever.retrieval_config = RetrievalConfig(retrieval_config)
+        retrieved_base_chunks_raw = retriever.invoke(query)
         retrieved_base_chunks = [self.process_chunk(chunk_raw, "base") for chunk_raw in retrieved_base_chunks_raw]
-        msg.good(f"Retrieved {len(retrieved_base_chunks)} base chunks.")
+        return retrieved_base_chunks
 
-        base_doc_ids = set([chunk.doc_id for chunk in retrieved_base_chunks])
-        msg.info(f"Retrieved base doc ids: {base_doc_ids}")
-
-        # additional-context-retrieval
-        retrieved_additional_chunks = []
-        for base_doc_id in base_doc_ids:
-            msg.info(f"Retrieving additional context for base doc id: {base_doc_id}...")
-            retrieval_config = {
-                "vectorSearchConfiguration": {
-                    "filter": {
-                        "equals": {
-                            "key": "category",
-                            "value": "additional",
-                        },
-                        "equals": {
-                            "key": "base-doc-id",
-                            "value": base_doc_id,
-                        }
+    def _retrieve_additional(self, retriever: AmazonKnowledgeBasesRetriever, query: str, top_k: int, base_doc_id: str) -> list[Chunk]:
+        retrieval_config = {
+            "vectorSearchConfiguration": {
+                "filter": {
+                    "equals": {
+                        "key": "category",
+                        "value": "additional",
                     },
-                    "numberOfResults": top_k,
-                }
+                    "equals": {
+                        "key": "base-doc-id",
+                        "value": base_doc_id,
+                    }
+                },
+                "numberOfResults": top_k,
             }
-            knowledgeBaseRetriever.retrieval_config = RetrievalConfig(retrieval_config)
-            retrieved_additional_chunks_raw = knowledgeBaseRetriever.invoke(query)
-            retrieved_chunks = [self.process_chunk(chunk_raw, "additional") for chunk_raw in retrieved_additional_chunks_raw]
-            retrieved_additional_chunks.extend(retrieved_chunks)
-            msg.good(f"Retrieved {len(retrieved_chunks)} additional chunks")
-        
-        return {"base": retrieved_base_chunks, "additional": retrieved_additional_chunks}
+        }
+        retriever.retrieval_config = RetrievalConfig(retrieval_config)
+        retrieved_additional_chunks_raw = retriever.invoke(query)
+        retrieved_chunks = [self.process_chunk(chunk_raw, "additional") for chunk_raw in retrieved_additional_chunks_raw]
+        return retrieved_chunks
 
     def process_chunk(self, chunk_raw: dict, doc_type: str) -> Chunk:
         doc_meta, chunk_meta = self.process_metadata(chunk_raw.metadata, doc_type)

@@ -26,7 +26,7 @@ class GPT4Generator(Generator):
             from langchain_openai import ChatOpenAI
             
             openai = ChatOpenAI(model=self.model_name, temperature=0.0, stream_usage=True)
-            msg.info(f"OpenAI Model {self.model_name} initialized. Generating stream for queries: {queries}...")
+            # msg.info(f"OpenAI Model {self.model_name} initialized. Generating stream for queries: {queries}...")
 
             history_str = utils.history_to_str(history)
 

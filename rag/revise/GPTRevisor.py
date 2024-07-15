@@ -23,7 +23,7 @@ class GPTRevisor(Revisor):
             from langchain_openai import ChatOpenAI
 
             openai = ChatOpenAI(model=self.model_name) # TODO temperature
-            msg.info(f"OpenAI Model {self.model_name} initialized. Revising...")
+            # msg.info(f"OpenAI Model {self.model_name} initialized. Revising...")
 
             history_str = utils.history_to_str(history)
 

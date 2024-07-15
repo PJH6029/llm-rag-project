@@ -126,3 +126,15 @@ class FileData(BaseModel):
     filename: str
     extension: str
     content: str
+
+
+class CombinedChunks:
+    def __init__(self, chunks: dict[str, Chunk]=None, doc_id="", doc_name="", doc_type="base"):
+        self.chunks = chunks if chunks is not None else {}
+        self.doc_type = doc_type
+        self.doc_id = doc_id
+        self.doc_name = doc_name
+        self.score = 0.0
+        self.url = None
+        self.base_doc_id = None
+        self.num_chunks = 0

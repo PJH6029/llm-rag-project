@@ -109,39 +109,98 @@ class RetrieverManager:
             "knowledge-base": KnowledgeBaseRetriever(),
         }
         self.selected_retriever: str = "knowledge-base"
-        self.top_k = 6
+        self.top_k = 5
 
     def retrieve(self, 
         queries: list[str], 
         embedder: Embedder, 
-    ) -> dict[str, list[Chunk]]:
+        top_k: int | None = None,
+    ) -> dict[str, dict[str, list[Chunk]]]:
         msg.info(f"Starting retrieval with {self.selected_retriever}")
         start_time = time.time()
+       
+        base_top_k, addtional_top_k = utils.managed_top_k(self.top_k if top_k is None else top_k)
 
         retriever = self.get_selected_retriever()
-        chunks_accumulated = { "base": [], "additional": []}
+        chunks_accumulated = {}
         for query in queries:
+            chunks_accumulated[query] = {"base": [], "additional": []}
             msg.info(f"Retrieving with query: {query}")
-            chunks = retriever.retrieve(query, embedder, top_k=self.top_k//2)
-            for key in chunks:
-                chunks_accumulated[key] += chunks[key]
 
-        msg.good(f"Retrieval completed with {(len(chunks_accumulated['base']) + len(chunks_accumulated['additional']))} Chunks in {time.time() - start_time:.2f} seconds")
+            # base context retrieval
+            msg.info("Retrieving base context...")
+            retrieved_base_chunks = retriever.retrieve(query, embedder, top_k=base_top_k, category="base")
+            chunks_accumulated[query]["base"] += retrieved_base_chunks
+            msg.good(f"Retrieved {len(retrieved_base_chunks)} base chunks")
+
+            # additional context retrieval
+            base_doc_ids = set([chunk.doc_id for chunk in retrieved_base_chunks])
+            msg.info(f"Retrieving additional context from {len(base_doc_ids)} base documents...")
+            for base_doc_id in base_doc_ids:
+                msg.info(f"Retrieving additional context for base doc id: {base_doc_id}...")
+                retrieved_additional_chunks = retriever.retrieve(query, embedder, top_k=addtional_top_k, category="additional", base_doc_id=base_doc_id)
+                chunks_accumulated[query]["additional"] += retrieved_additional_chunks
+                msg.good(f"Retrieved {len(retrieved_additional_chunks)} additional chunks")
+
+        total_base_chunks = sum([len(chunks_accumulated[query]["base"]) for query in queries])
+        total_additional_chunks = sum([len(chunks_accumulated[query]["additional"]) for query in queries])
+        msg.good(f"Retrieval completed with {total_base_chunks + total_additional_chunks} Chunks in {time.time() - start_time:.2f} seconds")
         return chunks_accumulated
 
-    def rerank(self, chunks: dict[str, list[Chunk]]) -> tuple[dict, dict]:
-        # doc_id, base_doc_id, score
-        base_chunks = chunks.get("base", [])
-        additional_chunks = chunks.get("additional", [])
+    def rerank(self, chunks: dict[str, dict[str, list[Chunk]]], top_k: int=None, k=60) -> dict[str, list[Chunk]]:
+        # {"<query>": {"base": list[Chunk], "additional": list[Chunk], ...}
+        base_top_k, additional_top_k = utils.managed_top_k(self.top_k if top_k is None else top_k)
         
-        base_chunks = self.combine_chunks(base_chunks)
-        additional_chunks = self.combine_chunks(additional_chunks, doc_type="additional")
+        total_base_chunks = sum([len(chunks[query]["base"]) for query in chunks])
+        total_additional_chunks = sum([len(chunks[query]["additional"]) for query in chunks])
+        msg.info(f"Reranking {total_base_chunks} base chunks and {total_additional_chunks} additional chunks")
 
-        # reorder additional chunks based on base chunk ids
-        # TODO
-        # base_doc_ids = base_chunks.keys()
+        flattened_chunks = {}
+        for query in chunks:
+            for doc_type in chunks[query]:
+                for chunk in chunks[query][doc_type]:
+                    flattened_chunks[chunk.chunk_id] = chunk
 
-        return base_chunks, additional_chunks
+        # reciprocal rank fusion for base chunks
+        fused_scores = {}
+        for query in chunks:
+            base_chunks = chunks[query]["base"]
+            base_chunks = sorted(base_chunks, key=lambda x: float(x.score), reverse=True)   
+
+            for rank, chunk in enumerate(base_chunks):
+                if chunk.chunk_id not in fused_scores:
+                    fused_scores[chunk.chunk_id] = 0
+                fused_scores[chunk.chunk_id] += 1 / (rank + k)
+            
+        reranked_base_chunks = []
+        for chunk_id in fused_scores:
+            reranked_base_chunks.append((flattened_chunks[chunk_id], fused_scores[chunk_id]))
+        # TODO introduce tie-breaker: recency. Currently, original score is used as tie-breaker
+        reranked_base_chunks: list[Chunk] = list(map(lambda x: x[0], sorted(reranked_base_chunks, key=lambda x: (float(x[1]), float(x[0].score)), reverse=True)))[:base_top_k]
+        reranked_base_chunks_doc_ids = set([chunk.doc_id for chunk in reranked_base_chunks])
+
+        # reciprocal rank fusion for additional chunks
+        fused_scores = {}
+        for query in chunks:
+            additional_chunks = chunks[query]["additional"]
+            additional_chunks = sorted(additional_chunks, key=lambda x: float(x.score), reverse=True)
+
+            for rank, chunk in enumerate(additional_chunks):
+                # skip if base doc is not in base chunks
+                if chunk.chunk_meta.get("base_doc_id", "") not in reranked_base_chunks_doc_ids:
+                    continue
+
+                if chunk.chunk_id not in fused_scores:
+                    fused_scores[chunk.chunk_id] = 0
+                fused_scores[chunk.chunk_id] += 1 / (rank + k)
+
+        reranked_additional_chunks = []
+        for chunk_id in fused_scores:
+            reranked_additional_chunks.append((flattened_chunks[chunk_id], fused_scores[chunk_id]))
+        reranked_additional_chunks: list[Chunk] = list(map(lambda x: x[0], sorted(reranked_additional_chunks, key=lambda x: float(x[1]), reverse=True)))[:additional_top_k]
+
+        msg.good(f"Reranking completed with {len(reranked_base_chunks)} base chunks and {len(reranked_additional_chunks)} additional chunks")
+        return {"base": reranked_base_chunks, "additional": reranked_additional_chunks}
 
     def cutoff_text(self, text: str, content_length: int) -> str:
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
@@ -156,54 +215,49 @@ class RetrieverManager:
         else:
             msg.info(f"Text has {len(encoded_tokens)} tokens, not truncating")
             return text
-
-    def combine_chunks(self, chunks: list[Chunk], doc_type: str="base") -> dict:
-        docs = {}
-        for chunk in chunks:
-            if chunk.doc_id not in docs:
-                docs[chunk.doc_id] = {"score": 0.0, "chunks": {}, "doc_name": chunk.doc_meta.get("doc_name", "")}
-                if doc_type == "additional":
-                    docs[chunk.doc_id]["base_doc_id"] = chunk.doc_meta.get("base_doc_id", "")
-            docs[chunk.doc_id]["score"] += float(chunk.score)
-            docs[chunk.doc_id]["chunks"][chunk.chunk_id] = chunk
-
-        for doc_id in docs:
-            chunk_cnt = len(docs[doc_id]["chunks"])
-            docs[doc_id]["num_chunks"] = chunk_cnt
         
-        # sort docs. preventing lost in the middle problem (see https://arxiv.org/abs/2307.03172)
-        docs = dict(sorted(docs.items(), key=lambda x: x[1]["score"], reverse=True))
+    def sort_combined_chunks(self, docs: dict[str, CombinedChunks]) -> dict[str, CombinedChunks]:
+        for doc_id in docs:
+            docs[doc_id].chunks = dict(sorted(docs[doc_id].chunks.items(), key=lambda x: float(x[1].score), reverse=True))
+        docs = dict(sorted(docs.items(), key=lambda x: x[1].score, reverse=True))
         return docs
 
-    def combine_context(self, base_chunks: list[Chunk], additional_chunks: list[Chunk]) -> dict[str, str]:
-        base_docs = self.combine_chunks(base_chunks)
-        additional_docs = self.combine_chunks(additional_chunks, doc_type="additional")
+    def combine_chunks(self, chunks: list[Chunk], doc_type: str="base", attach_url: bool=False) -> dict[str, CombinedChunks]:
+        docs: dict[str, CombinedChunks] = {}
+        for chunk in chunks:
+            if chunk.doc_id not in docs:
+                docs[chunk.doc_id] = CombinedChunks(doc_id=chunk.doc_id, doc_name=chunk.doc_meta.get("doc_name", ""), doc_type=doc_type)
+                if doc_type == "additional":
+                    docs[chunk.doc_id].doc_name = chunk.doc_meta.get("doc_name", "")
+                if attach_url:
+                    docs[chunk.doc_id].url = utils.get_presigned_url(chunk.doc_id)
+            docs[chunk.doc_id].score += float(chunk.score)
+            docs[chunk.doc_id].chunks[chunk.chunk_id] = chunk
 
+        for doc_id in docs:
+            chunk_cnt = len(docs[doc_id].chunks)
+            docs[doc_id].num_chunks = chunk_cnt
+        
+        return docs
+
+    def combine_context(self, base_docs: dict[str, CombinedChunks], additional_docs: dict[str, CombinedChunks]) -> dict[str, str]:
         context = {
             "base": "",
             "additional": "",
         }
         
-        # docs = dict(list(docs.items())[:self.top_k])
-
         # base context
         for doc_id in base_docs:
-            # sort chunk by scores
-            sorted_chunks: list[Chunk] = list(sorted(base_docs[doc_id]["chunks"].values(), key=lambda chunk: chunk.score, reverse=True))
+            context["base"] += f"--- Document: {base_docs[doc_id].doc_name} ---\n\n"
 
-            context["base"] += f"--- Document: {base_docs[doc_id]['doc_name']} ---\n\n"
-
-            for chunk in sorted_chunks:
+            for chunk in base_docs[doc_id].chunks.values():
                 context["base"] += f"{chunk.to_detailed_str()}\n\n"
         
         # additional context
         for doc_id in additional_docs:
-            # sort chunk by scores
-            sorted_chunks: list[Chunk] = list(sorted(additional_docs[doc_id]["chunks"].values(), key=lambda chunk: chunk.score, reverse=True))
+            context["additional"] += f"--- Document: {additional_docs[doc_id].doc_name} ---\n\n"
 
-            context["additional"] += f"--- Document: {additional_docs[doc_id]['doc_name']} ---\n\n"
-
-            for chunk in sorted_chunks:
+            for chunk in additional_docs[doc_id].chunks.values():
                 context["additional"] += f"{chunk.to_detailed_str()}\n\n"
 
         return context
@@ -276,7 +330,7 @@ class RevisorManager: # TODO integrate with GeneratorManager
         self.selected_revisor: str = "gpt"
     
     def revise(self, queries: list[str], history: dict=None, revise_prompt: ChatPromptTemplate=None) -> str:
-        msg.info(f"Starting query revision with {self.selected_revisor}")
+        msg.info(f"Starting query transformation with {self.selected_revisor}")
         start_time = time.time()
 
         revisor = self.get_selected_revisor()
@@ -286,7 +340,7 @@ class RevisorManager: # TODO integrate with GeneratorManager
         truncated_history = utils.truncate_history(history, max_tokens=revisor.context_window * 0.7) # TODO
 
         response = revisor.revise(queries, truncated_history, revise_prompt)
-        msg.good(f"Revision completed in {time.time() - start_time:.2f} seconds")
+        msg.good(f"Transformation completed in {time.time() - start_time:.2f} seconds")
         return response
 
     def set_revisor(self, revisor_name: str) -> bool:
@@ -322,39 +376,71 @@ class RAGManager:
         self.retriever_manager = RetrieverManager()
         self.generator_manager = GeneratorManager()
         self.revisor_manager = RevisorManager()
+        self.config = {
+            "model": {},
+            "pipeline": {},
+        }
 
-    def init(self, config: dict) -> None:
-        pass
+    def set_config(self, config: dict) -> None:
+        self.config = {
+            "model": config.get("model", {}),
+            "pipeline": config.get("pipeline", {}),
+        }
+        model_config = self.config["model"]
+
+        self.reader_manager.selected_reader = model_config.get("Reader", {}).get("selected", None)
+        self.chunker_manager.selected_chunker = model_config.get("Chunker", {}).get("selected", None)
+        self.embedder_manager.selected_embedder = model_config.get("Embedder", {}).get("selected", None)
+        self.retriever_manager.selected_retriever = model_config.get("Retriever", {}).get("selected", None)
+        self.generator_manager.selected_generator = model_config.get("Generator", {}).get("selected", None)
+        self.revisor_manager.selected_revisor = model_config.get("Revisor", {}).get("selected", None)
+
+        # log manager configs
+        msg.info(f"Setting READER to {self.reader_manager.selected_reader}")
+        msg.info(f"Setting CHUNKER to {self.chunker_manager.selected_chunker}")
+        msg.info(f"Setting EMBEDDER to {self.embedder_manager.selected_embedder}")
+        msg.info(f"Setting RETRIEVER to {self.retriever_manager.selected_retriever}")
+        msg.info(f"Setting GENERATOR to {self.generator_manager.selected_generator}")
+        msg.info(f"Setting REVISOR to {self.revisor_manager.selected_revisor}")
 
     def index_documents(self, files: list[FileData]) -> list[Document]:
         pass
 
-    def retrieve_chunks(self, queries: list[str], history: dict=None, 
-                        revise_query=False, hyde=False) -> tuple[list[Chunk], dict[str, str]]:
+    def retrieve_chunks(self, queries: list[str], history: dict=None, top_k: int=None,
+                        revise_query: bool=None, hyde: bool=None) -> tuple[list[Chunk], dict[str, str]]:
+        # if revise_query and hyde are provided, they get priority over the config
+
         # pre-retrieval
         q = []
-        if revise_query:
+        if (isinstance(revise_query, bool) and revise_query) or self.config["pipeline"].get("revise_query", False):
             _history = {} if history is None else history
             # Rewrite query
+            msg.info("Rewriting queries...")
             rewrited_query = self.revisor_manager.revise(queries, _history)
-            msg.info(f"Revised queries: {rewrited_query}")
+            # msg.info(f"Revised queries: {rewrited_query}")
             q.append(rewrited_query)
-        if hyde:
+        if (isinstance(hyde, bool) and hyde) or self.config["pipeline"].get("hyde", False):
             # HyDE
+            msg.info("Applying HyDE...")
             hyde_answer = self.revisor_manager.revise(queries, _history, revise_prompt=hyde_prompt)
-            msg.info(f"HyDE answer: {hyde_answer}")
+            # msg.info(f"HyDE answer: {hyde_answer}")
             q.append(hyde_answer)
 
+        _queries = q if q else queries
         # TODO Multi-RAG
         chunks = self.retriever_manager.retrieve(
-                                queries=q if q else queries,
+                                queries=_queries,
                                 embedder=self.embedder_manager.get_selected_embedder(),
+                                top_k=top_k,
                           )
         
         # post-retrieval
+        chunks = self.retriever_manager.rerank(chunks, top_k=top_k)
         base_chunks, additional_chunks = chunks.get("base", []), chunks.get("additional", [])
-        # base_docs, additional_docs = self.rerank(chunks)
-        context = self.retriever_manager.combine_context(base_chunks, additional_chunks)
+        base_docs = self.retriever_manager.combine_chunks(base_chunks)
+        additional_docs = self.retriever_manager.combine_chunks(additional_chunks, doc_type="additional")
+
+        context = self.retriever_manager.combine_context(base_docs, additional_docs)
         generator_context_window = self.generator_manager.get_selected_generator().context_window
         managed_context = {
             "base": self.retriever_manager.cutoff_text(context["base"], generator_context_window),
@@ -376,6 +462,8 @@ class RAGManager:
     def reset(self) -> None:
         pass
 
-    def combine_chunks(self, chunks: list[Chunk]) -> dict:
-        return self.retriever_manager.combine_chunks(chunks)
+    def combine_chunks(self, chunks: list[Chunk], doc_type: str, attach_url=False) -> dict[str, CombinedChunks]:
+        res = self.retriever_manager.combine_chunks(chunks, doc_type=doc_type, attach_url=attach_url)
+        res = self.retriever_manager.sort_combined_chunks(res)
+        return res
 

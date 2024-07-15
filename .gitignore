@@ -8,3 +8,6 @@ venv*
 .vscode
 queries.txt
 ref_docs/*
+evaluate/evaluation/*
+evaluate/experiment/*
+evaluate/reference/*
