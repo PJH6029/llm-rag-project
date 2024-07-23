@@ -1,45 +1,62 @@
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
-generation_prompt = ChatPromptTemplate.from_template(
-"""You are an assistant for question-answering tasks. 
-Use the following pieces of retrieved context to answer the question 
-considering the history of the conversation.
+translation_prompt_template = """
+You are an assistant for Korean-English translation tasks.
 
-There may exist multiple documents containing the answer,
-but they are different versions of the same document.
-If you find multiple candidate answers,
-you should compare them in detail and select the most recent one.
+I will give you the sentence.
+If the sentence is already written in English, just copy the sentence.
+If not, please translate the sentence from Korean to English.
 
-If you don't know the answer, just say that you don't know. 
+You should say only the translation of the sentence, and don't say any additional information.
 
-You can answer in descriptive form or paraphrased form if you want,
-and keep the answer concise.
+<sentence>
+{sentence}
+</sentence>
 
-You should answer in at most 4 sentences.
+Translation:
+"""
+translation_prompt = ChatPromptTemplate.from_template(translation_prompt_template)
 
-Feel free to use markdown to format your answer.
-
+rewrite_prompt_template = """
+You are an assistant for question-revision tasks.
+Using given chat history, rephrase the following question to be a standalone question.
+The standalone question must have main words of the original question.
+Write the revised question in English.
 
 <chat-history>
 {history}
 </chat-history>
 
-
-<context> 
-{context} 
-</context>
-
-
 <question>
-{query} 
+{query}
 </question>
 
-
-Answer:"""
-)
-
-generation_prompt_v2 = ChatPromptTemplate.from_template(
+Revised question:
 """
+rewrite_prompt = ChatPromptTemplate.from_template(rewrite_prompt_template)
+
+expansion_prompt_template = """
+"""
+expansion_prompt = ChatPromptTemplate.from_template(expansion_prompt_template)
+
+hyde_prompt_template = """
+You are an assistant for question-answering tasks.
+Please write a passage to answer the question, considering the given chat history.
+Write the answer in English.
+
+<chat-history>
+{history}
+</chat-history>
+
+<question>
+{query}
+</question>
+
+Answer:
+"""
+hyde_prompt = ChatPromptTemplate.from_template(hyde_prompt_template)
+
+generation_prompt_template = """
 You are an assistant for question-answering tasks.
 Use the following pieces of retrieved context to answer the question considering the chat history.
 
@@ -49,7 +66,7 @@ It is the most base information that contains the answer.
 Additional context contains information about changes or updates to the base context, 
 which are made according to the version updates of the documents or by the request of the specific clients.
 
-You should answer step by step.
+You should think step by step.
 You should first find the answer from the base context,
 and then consider the additional context to see if there are any updates or changes to the answer.
 If there are several changes, you should consider the most recent additional context to provide the most up-to-date answer,
@@ -59,7 +76,7 @@ If you don't know the answer, just say that you don't know.
 
 You can answer in descriptive form or paraphrased form if you want, and keep the answer concise.
 
-You should answer in at most 4 sentences.
+You should answer with the format of the example answer below.
 Feel free to use markdown to format your answer.
 
 --------------------------------------------------
@@ -71,9 +88,13 @@ Human: Can you describe the features of UTIL-1?
 <context>
     <base-context>
     --- Document: Datacenter NVMe SSD Specification v2.0r21.pdf ---
-    CHUNK 0
-    SIMILARITY_SCORE= 0.99
-    TEXT=
+    Average Score: 0.99
+    DOC META:
+    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf', 'doc_name': 'Datacenter NVMe SSD Specification v2.0r21.pdf', 'category': 'base', 'version': 'v2.0r21', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf'}}
+    
+    --- Chunk: dbc8ea71-dd6e-45df-a78c-0bec284d170c-9869493d-2d77-484c-82c3-c9b4befcef55 ---
+    Score: 0.99
+    TEXT:
     16.1 NVMe CLI Management Utility
     The NVMeCLI utility (https://github.com/linux-nvme/nvme-cli) shall be used as one of the management utilities for NVMe devices.
     Requirement ID: UTIL-1
@@ -85,24 +106,18 @@ Human: Can you describe the features of UTIL-1?
     - Health status.
     - Log page reads including vendor log pages.
     - SMART status.
-    METADATA=
-    {{
-        "document_metadata": {{
-            "doc_name": "Datacenter NVMe SSD Specification v2.0r21.pdf",
-            "doc_type": "base",
-            "version": "v2.0r21",
-            "uri": "https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf"
-        }},
-        "chunk_metadata": {{
-            "score": HIGH,
-            "excerpt_page_number": "110",
-        }}
-    }}
+    CHUNK META:
+    {{'chunk_id': 'dbc8ea71-dd6e-45df-a78c-0bec284d170c-9869493d-2d77-484c-82c3-c9b4befcef55', 'page': 110, 'score': 'HIGH'}}
+    
 
     --- Document: datacenter-nvme-ssd-specification-v2-5-pdf.pdf ---
-    CHUNK 0
-    SIMILARITY SCORE= 0.97
-    TEXT=
+    Average Score: 0.97
+    DOC META:
+    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_name': 'datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'category': 'base', 'version': 'v2.5', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
+    
+    --- Chunk: 7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b ---
+    Score: 0.97
+    TEXT:
     18.1 NVMe CLI Management Utility
     The NVMeCLI utility (https://github.com/linux-nvme/nvme-cli/tree/master/plugins/ocp) shall be used as one of the management utilities for NVMe devices.
     Requirement ID: UTIL-1
@@ -114,26 +129,20 @@ Human: Can you describe the features of UTIL-1?
     - Health status.
     - Log page reads including vendor log pages.
     - SMART status.
-    METADATA=
-    {{
-        "document_metadata": {{
-            "doc_name": "datacenter-nvme-ssd-specification-v2-5-pdf.pdf",
-            "doc_type": "base",
-            "version": "v2.5",
-            "uri": "https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf"
-        }},
-        "chunk_metadata": {{
-            "score": HIGH,
-            "excerpt_page_number": "170",
-        }}
-    }}
+    CHUNK META:
+    {{'chunk_id': '7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b', 'page': 170, 'score': 'HIGH'}}
 
     </base-context>
     <additional-context>
     --- Document: Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf ---
-    CHUNK 0
-    SIMILARITY SCORE= 0.89
-    TEXT=
+    Based on: s3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf
+    Average Score: 0.89
+    DOC META:
+    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_name': 'Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'category': 'additional', 'version': 'v2.5-addendum-v0.20', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'base_doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
+    
+    --- Chunk: 7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b ---
+    Score: 0.89
+    TEXT:
     2. Change List
     2.1. Utilization Features
     Requirement ID: UTIL-1
@@ -144,20 +153,8 @@ Human: Can you describe the features of UTIL-1?
     - Controller reset to load FW.
     - Health status.
     - SMART status.
-    METADATA=
-    {{
-        "document_metadata": {{
-            "doc_name": "Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf",
-            "doc_type": "additional",
-            "version": "v2.5-addendum-v0.20",
-            "uri": "https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf"
-        }},
-        "chunk_metadata": {{
-            "score": HIGH,
-            "excerpt_page_number": "3",
-            "base_doc_id": "datacenter-nvme-ssd-specification-v2-5-pdf.pdf"
-        }}
-    }}
+    CHUNK META:
+    {{'chunk_id': '7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b', 'page': 3, 'score': 'HIGH'}}
     </additional-context>
 </context>
 
@@ -200,12 +197,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 </chat-history>
 
 <context>
-    <base-context>
-    {base_context}
-    </base-context>
-    <additional-context>
-    {additional_context}
-    </additional-context>
+{context}
 </context>
 
 <question>
@@ -214,38 +206,11 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 
 Answer:
 """
-)
+generation_prompt = ChatPromptTemplate.from_template(generation_prompt_template)
 
-revision_prompt = ChatPromptTemplate.from_template(
-"""You are an assistant for question-revision tasks.
-Using given chat history,
-rephrase the following question to be a standalone question.
-The standalone question must have main words of the original question.
-
-<chat-history>
-{history}
-</chat-history>
-
-<question>
-{query}
-</question>
-
-Revised question:
+verification_prompt_template = """
+Given context, verify the fact
+Context: {context}
+Answer: {response}
 """
-)
-
-hyde_prompt = ChatPromptTemplate.from_template(
-"""You are an assistant for question-answering tasks.
-Please write a passage to answer the question, considering the given chat history.
-
-<chat-history>
-{history}
-</chat-history>
-
-<question>
-{query}
-</question>
-
-Answer:
-"""
-)
+verification_prompt = ChatPromptTemplate.from_template(verification_prompt_template)

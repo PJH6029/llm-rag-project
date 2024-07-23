@@ -4,9 +4,12 @@ langchain
 langchain-community
 langchain-openai
 langchain-core
+langchain-pinecone
 boto3
 wasabi
 tiktoken
 faiss-cpu
 pypdf
 pydantic
+pinecone-client
+pinecone-text

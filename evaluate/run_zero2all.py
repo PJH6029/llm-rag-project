@@ -7,10 +7,10 @@ from evaluate.util import cold_start, run_experiment, evaluate_experiment
 
 enable_cold_start = False
 enable_experiment = True
-enable_evaluation = True
+enable_evaluation = False
 
-experiment_name = "experiment_revise_hyde_kendra"
-eval_name = "experiment_revise_hyde_kendra_gpt-4-turbo"
+experiment_name = "experiment_revise_hyde_kb_4"
+eval_name = "experiment_revise_hyde_kb_gpt-4-turbo_4"
 ref_json_name = "data_small.json"
 
 num_questions = 3
@@ -26,7 +26,7 @@ run_config = {
             "Reader": {"selected": ""},
             "Chunker": {"selected": ""},
             "Embedder": {"selected": ""},
-            "Retriever": {"selected": "kendra"},
+            "Retriever": {"selected": "knowledge-base"},
             "Generator": {"selected": "gpt4"},
             "Revisor": {"selected": "gpt"},
         },

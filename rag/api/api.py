@@ -1,74 +1,88 @@
-import os
+from typing import Generator
 from wasabi import msg
+from langchain_community.callbacks import get_openai_callback
 
-from rag.managers import RAGManager
-from rag import utils
-from rag.types import *
+from rag.rag_manager import RAGManager
+from rag import util
+from rag.type import *
 
-manager: RAGManager = None
-
-recent_base_docs = None
-recent_additional_docs = None
+recent_chunks = None
+recent_translated_query = None
+rag_manager = None
 
 def init(config: dict=None):
-    utils.load_secrets()
-    global manager
-    manager = RAGManager()
-    # config = utils.load_config()
+    util.load_secrets()
+    global rag_manager
+    rag_manager = RAGManager()
     _config = {
-        "model": {
-            "Reader": {"selected": ""},
-            "Chunker": {"selected": ""},
-            "Embedder": {"selected": ""},
-            "Retriever": {"selected": "knowledge-base"},
-            "Generator": {"selected": "gpt4"},
-            "Revisor": {"selected": "gpt"},
+        "transformation": { # optional
+            "model": "gpt-4o-mini",
+            "enable": {
+                "translation": True,
+                "rewriting": False,
+                "expansion": False,
+                "hyde": False,
+            },
         },
-        "pipeline": {
-            "revise_query": True,
-            "hyde": True,
-        }
+        "retrieval": { # mandatory
+            "retriever": ["pinecone", "kendra"],
+            "weights": [0.5, 0.5],
+            "embedding": "amazon.titan-embed-text-v1", # may be optional
+            "top_k": 5,
+            "post_retrieval": {
+                "rerank": True,
+                # TODO
+            }
+        },
+        "generation": { # mandatory
+            "model": "gpt-4o-mini",
+        },
+        "fact_verification": { # optional
+            "model": "gpt-4o-mini",
+            "enable": False
+        },
     } if config is None else config
-    manager.set_config(_config)
+    
+    rag_manager.set_config(_config)
 
 init()
 
-def retrieve_config():
-    pass
-
-def reset():
-    pass
-
-def query():
-    pass
-
-def query_stream(query: str, history: list[dict]=None):
-    msg.info(f"Querying with: {query} and {len(history)} history...")
-    base_chunks, additional_chunks, context = manager.retrieve_chunks([query], history=history)
-    for response in manager.generate_stream_answer([query], context, history):
-        yield response
-        # TODO fact verification
+def _setup_generation_params(query: str, history: list[ChatLog]) -> tuple[str, list[ChatLog], list[Chunk]]:
+    queries = rag_manager.transform_query(query, history)
+    translated_query = queries[0] # first query is the translated query
+    chunks = rag_manager.retrieve(queries)
     
-    global recent_base_docs, recent_additional_docs
-    recent_base_docs = manager.combine_chunks(base_chunks, doc_type="base", attach_url=True)
-    recent_additional_docs = manager.combine_chunks(additional_chunks, doc_type="additional", attach_url=True)
-    msg.good(f"Query completed")
+    global recent_chunks, recent_translated_query
+    recent_chunks = chunks
+    recent_translated_query = translated_query
+    
+    return translated_query, history, chunks
+    
 
-def index_document(file: FileData):
-    pass 
-    # TODO metadata
+def query(query: str, history: list[ChatLog]=None) -> GenerationResult:
+    history = history or []
+    with get_openai_callback() as cb:
+        translated_query, history, chunks = _setup_generation_params(query, history)
 
-def index_all_documents(files: list[FileData]):
-    pass
+        generation_response = rag_manager.generate(translated_query, history, chunks)
+        verification_response = rag_manager.verify_fact(generation_response, chunks)
+        
+        print(cb)
+    return {"generation": generation_response, "fact_verification": verification_response}
+    
 
-def retrieve_document(queries: list[str]):
-    pass
+def query_stream(query: str, history: list[ChatLog]=None) -> Generator[GenerationResult, None, None]:
+    history = history or []
+    with get_openai_callback() as cb:
+        translated_query, history, chunks = _setup_generation_params(query, history)
 
-def retrieve_all_documents(queries: list[str]):
-    pass
-
-def get_document_by_id(doc_id: str):
-    pass
-
-def get_documents_by_ids(doc_ids: list[str] | str="all"):
-    pass
+        generation_response = ""
+        for response in rag_manager.generate_stream(translated_query, history, chunks):
+            yield {"generation": response}
+            generation_response += response
+        
+        for response in rag_manager.verify_fact_stream(generation_response, chunks):
+            yield {"fact_verification": response}
+        
+        print(cb)
+    
