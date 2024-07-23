@@ -38,10 +38,11 @@ class EnsembleRetriever(BaseRAGRetriever):
 
     def weighted_reciprocal_rank(self, retrieved_chunks_list: list[list[Chunk]]) -> list[Chunk]:
         if self.weights and len(self.weights) != len(retrieved_chunks_list):
-            msg.fail("Weights length does not match the number of retrievers. Using equal weights.")
-            raise ValueError("Weights length does not match the number of retrievers. Using equal weights.")
+            msg.fail("Weights length does not match the number of retrievers")
+            raise ValueError("Weights length does not match the number of retrievers")
         
         if self.weights is None:
+            msg.warn("Weights are not provided. Using equal weights")
             self.weights = [1.0] * len(retrieved_chunks_list)
         
         rrf_score: dict[str, float] = defaultdict(float)
