@@ -17,7 +17,7 @@ class RetrievalConfig:
         return self._config
 
 class KnowledgeBaseRetriever(BaseRAGRetriever):
-    def __init__(self, top_k: int = 5, embeddings = None) -> None:
+    def __init__(self, top_k: int = 5, **kwargs) -> None:
         super().__init__(top_k)
         
         required = ["knowledge_base_id", "region_name"]
@@ -97,7 +97,8 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
             chunk_id=self._get_chunk_id(chunk_raw),
             doc_meta=doc_meta,
             chunk_meta=chunk_meta,
-            score=chunk_raw.metadata["score"]
+            score=chunk_raw.metadata["score"],
+            source_retriever=self.__class__.__name__
         )
     
     def _process_metadata(self, chunk_raw: Document) -> tuple[dict, dict]:

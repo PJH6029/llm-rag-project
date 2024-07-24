@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -6,9 +6,8 @@ from langchain_core.embeddings import Embeddings
 from rag.type import *
 
 class BaseRAGRetriever:
-    def __init__(self, top_k: int=5, embeddings: Optional[Embeddings] = None) -> None:
+    def __init__(self, top_k: int=5, **kwargs) -> None:
         self.top_k = top_k
-        self.embeddings = embeddings
         self._set_env()
     
     def _set_env(self):
@@ -16,7 +15,7 @@ class BaseRAGRetriever:
         pass
     
     def retrieve(self, queries: list[str], filter: Optional[Filter]=None) -> list[Chunk]:
-        raise []
+        return []
     
     def _arange_filter(self, filter: Filter) -> dict:
         raise NotImplementedError()
@@ -27,7 +26,14 @@ class BaseRAGRetriever:
 
 class FilterUtil:
     @staticmethod
-    def from_dict(filter: dict) -> Optional[Filter]:
+    def from_any(filter: Any) -> Filter:
+        if isinstance(filter, Filter):
+            return filter
+        if isinstance(filter, dict):
+            return FilterUtil.from_dict(filter)
+    
+    @staticmethod
+    def from_dict(filter: dict | None) -> Optional[Filter]:
         if not filter:
             return None
         if len(filter) > 2:

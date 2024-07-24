@@ -1,6 +1,8 @@
-from typing import Generator
+from typing import Generator, Any
 from wasabi import msg
+
 from langchain_community.callbacks import get_openai_callback
+from langchain.globals import set_debug
 
 from rag.rag_manager import RAGManager
 from rag import util
@@ -11,10 +13,15 @@ recent_translated_query = None
 rag_manager = None
 
 def init(config: dict=None):
+    # set_debug(True)
+    
     util.load_secrets()
     global rag_manager
     rag_manager = RAGManager()
     _config = {
+        "global": {
+            "context-hierarchy": False, # used in selecting retriever and generation prompts
+        },
         "transformation": { # optional
             "model": "gpt-4o-mini",
             "enable": {
@@ -25,10 +32,10 @@ def init(config: dict=None):
             },
         },
         "retrieval": { # mandatory
-            "retriever": ["pinecone", "kendra"],
-            "weights": [0.5, 0.5],
+            "retriever": ["pinecone", "knowledge-base-pinecone"],
+            # "weights": [0.5, 0.5],
             "embedding": "amazon.titan-embed-text-v1", # may be optional
-            "top_k": 5,
+            "top_k": 7,
             "post_retrieval": {
                 "rerank": True,
                 # TODO
@@ -86,3 +93,16 @@ def query_stream(query: str, history: list[ChatLog]=None) -> Generator[Generatio
         
         print(cb)
     
+def upload_data(data: Any):
+    # 1. upload to s3
+    # 2. ingest
+    pass    
+
+def ingest_data(data: Any):
+    # 1. download to local from s3 with metadata
+    # 2. split
+    # 3. embed
+    # 4. upload to vectorstore
+    pass
+
+# TODO ingesting logic may be different between vectorstores. Need to abstract this.

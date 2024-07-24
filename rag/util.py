@@ -20,6 +20,18 @@ def load_secrets():
     }
     for key in keys:
         os.environ[key] = st.secrets[key]
+        
+def merge_configs(*configs: dict) -> dict:
+    merged_config = {}
+    for config in configs:
+        merged_config = {**merged_config, **config}
+    return merged_config
+
+def remove_none(config: dict) -> dict:
+    return {k: v for k, v in config.items() if v is not None}
+
+def remove_falsy(config: dict) -> dict:
+    return {k: v for k, v in config.items() if v}
 
 def get_presigned_url(s3_uri: str) -> str:
     s3 = boto3.client("s3")

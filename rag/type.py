@@ -17,6 +17,7 @@ class Chunk(BaseModel):
     doc_meta: dict = {}
     chunk_meta: dict = {}
     score: float = 0.0
+    source_retriever: str = ""
     
     def __str__(self) -> str:
         return f"Chunk(doc_id={self.doc_id}, chunk_id={self.chunk_id}, score={self.score}, doc_meta={self.doc_meta}, chunk_meta={self.chunk_meta})"

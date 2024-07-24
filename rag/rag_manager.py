@@ -3,6 +3,7 @@ from wasabi import msg
 import time
 
 from rag.managers import (
+    BasePipelineManager,
     TransformerManager,
     RetrieverManager,
     GeneratorManager,
@@ -22,11 +23,14 @@ class RAGManager:
     
     def set_config(self, config: dict):
         self.config = {**config}
-        self.transformer_manager.set_config(config.get("transformation", {}))
-        self.retriever_manager.set_config(config.get("retrieval", {}))
-        self.generator_manager.set_config(config.get("generation", {}))
-        self.fact_verifier_manager.set_config(config.get("fact_verification", {}))
-    
+        self.global_config = config.get("global", {})
+        
+        config_sections = ["transformation", "retrieval", "generation", "fact_verification"]
+        managers: list[BasePipelineManager] = [self.transformer_manager, self.retriever_manager, self.generator_manager, self.fact_verifier_manager]
+        for section, manager in zip(config_sections, managers):
+            manager.set_config(util.merge_configs(config.get(section, {}), self.global_config))
+        msg.good("RAGManager successfully configured")
+        
     def transform_query(self, query: str, history: list[ChatLog]) -> list[str]:
         msg.info(f"Transforming query starting with: '{query}' and {len(history)} history...")
         start = time.time()
@@ -36,63 +40,16 @@ class RAGManager:
         end = time.time()
         msg.good(f"Query transformed in {end-start:.2f}s, resulting in {len(queries)} queries")
         return queries
-    
+
     def retrieve(self, queries: list[str]) -> list[Chunk]:
         msg.info(f"Retrieving with: {len(queries)} queries...")
         start = time.time()
         
-        # base context retrieval
-        base_chunks = self.retriever_manager.retrieve(
-            queries, filter={"equals": {"key": "category", "value": "base"}}
-        )
-        managed_base_chunks = self.retriever_manager.rerank(base_chunks) # TODO topk
-        
-        # additional context retrieval
-        base_doc_ids = list(set([c.doc_id for c in managed_base_chunks]))
-        additional_chunks = self.retriever_manager.retrieve(
-            queries, filter={
-                "andAll": [
-                    {"equals": {"key": "category", "value": "additional"}}, 
-                    {"in": {"key": "base_doc_id", "value": base_doc_ids}}
-                ]
-            }
-        )
-        managed_additional_chunks = self.retriever_manager.rerank(additional_chunks) # TODO topk
-        
-        invocation_cnt = 2 * len(queries)
-        
-        chunks = managed_base_chunks + managed_additional_chunks
-        self.validate(chunks)
+        chunks = self.retriever_manager.retrieve(queries)
         
         end = time.time()
-        msg.good(f"{len(chunks)} chunks retrieved in {end-start:.2f}s with {invocation_cnt} invocations")
+        msg.good(f"{len(chunks)} chunks retrieved in {end-start:.2f}s")
         return chunks
-
-    def validate(self, chunks: list[Chunk]) -> None:
-        msg.info("Validating retrieved chunks...")
-        # category should be in ["base", "additional"]
-        try:
-            for chunk in chunks:
-                category = chunk.doc_meta.get("category")
-                assert category in ["base", "additional"]
-        except Exception as e:
-            msg.warn(f"Validation failed: {e}")
-        
-        # base doc id of additional chunks should be in base chunks
-        try:
-            base_chunk_ids = set([
-                chunk.doc_id for chunk in chunks if chunk.doc_meta.get("category") == "base"
-            ])
-            
-            for chunk in chunks:
-                if chunk.doc_meta.get("category") == "additional":
-                    base_doc_id = chunk.doc_meta.get("base_doc_id")
-                    assert base_doc_id in base_chunk_ids
-        except Exception as e:
-            msg.fail(f"Validation failed: {e}")
-        
-        msg.good("Validation passed.")
-        return
 
     def generate(
         self, query: str, history: Optional[list[ChatLog]]=None, chunks: Optional[list[Chunk]]=None

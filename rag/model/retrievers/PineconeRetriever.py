@@ -10,8 +10,9 @@ from rag.type import *
 from rag.util import generate_id
 
 class PineconeRetriever(BaseRAGRetriever):
-    def __init__(self, top_k: int = 5, embeddings: Embeddings = None) -> None:
-        super().__init__(top_k, embeddings)
+    def __init__(self, top_k: int = 5, embeddings: Embeddings = None, **kwargs) -> None:
+        super().__init__(top_k)
+        self.embeddings = embeddings
         self.vectorstore = PineconeVectorStore(
             index_name = self.index_name,
             embedding=self.embeddings,
@@ -20,9 +21,8 @@ class PineconeRetriever(BaseRAGRetriever):
     def _set_env(self):
         self.index_name = os.environ["PINECONE_INDEX_NAME"]
 
-    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
-        if filter is not None:
-            filter_dict = self._arange_filter(filter)
+    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:            
+        filter_dict = self._arange_filter(filter) if filter is not None else None
         
         retrieved_chunks = []
         for query in queries:
@@ -32,11 +32,13 @@ class PineconeRetriever(BaseRAGRetriever):
                 filter=filter_dict,
             )
             if result:
-                retrieved_chunks_raw, scores = list(zip(*result))
+                retrieved_chunks_raw, scores = zip(*result)
             else:
                 retrieved_chunks_raw, scores = [], []
-            for idx, chunks_raw in enumerate(retrieved_chunks_raw):
-                chunks_raw.metadata["score"] = scores[idx]
+                
+            for chunk_raw, score in zip(retrieved_chunks_raw, scores):
+                chunk_raw.metadata["score"] = score
+
             retrieved_chunks_for_query = [self.process_chunk(chunks_raw) for chunks_raw in retrieved_chunks_raw]
             retrieved_chunks.extend(retrieved_chunks_for_query)
         return retrieved_chunks
@@ -79,7 +81,8 @@ class PineconeRetriever(BaseRAGRetriever):
             chunk_id=generate_id(chunk_raw.page_content),
             doc_meta=doc_meta,
             chunk_meta=chunk_meta,
-            score=chunk_raw.metadata["score"]
+            score=chunk_raw.metadata["score"],
+            source_retriever=self.__class__.__name__
         )
     
     def _process_metadata(self, chunk_raw: Document) -> tuple[dict, dict]:

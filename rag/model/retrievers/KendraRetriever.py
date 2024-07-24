@@ -7,7 +7,7 @@ from rag.model.retrievers.base import BaseRAGRetriever
 from rag.type import *
 
 class KendraRetriever(BaseRAGRetriever):
-    def __init__(self, top_k: int = 5, embeddings = None) -> None:
+    def __init__(self, top_k: int = 5, **kwargs) -> None:
         super().__init__(top_k)
         self.retriever = AmazonKendraRetriever(
             index_id = self.kendra_index_id,
@@ -88,6 +88,7 @@ class KendraRetriever(BaseRAGRetriever):
             doc_meta=doc_meta,
             chunk_meta=chunk_meta,
             score=self._score_floatify(chunk_raw.metadata["score"]),
+            source_retriever=self.__class__.__name__
         )
 
     def _process_metadata(self, chunk_raw: Document) -> tuple[dict, dict]:
