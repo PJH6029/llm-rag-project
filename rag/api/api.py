@@ -32,9 +32,9 @@ def init(config: dict=None):
             },
         },
         "retrieval": { # mandatory
-            "retriever": ["pinecone", "knowledge-base-pinecone"],
+            "retriever": ["kendra"],
             # "weights": [0.5, 0.5],
-            "embedding": "amazon.titan-embed-text-v1", # may be optional
+            # "embedding": "amazon.titan-embed-text-v1", # may be optional
             "top_k": 7,
             "post_retrieval": {
                 "rerank": True,
