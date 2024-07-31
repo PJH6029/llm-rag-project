@@ -3,8 +3,8 @@ from wasabi import msg
 
 from rag.managers.base import BasePipelineManager
 from rag.type import *
-from rag.model.retrievers import *
-from rag.model import embeddings
+from rag.component.retriever import *
+from rag.component import embeddings
 from rag import util
 
 
@@ -23,7 +23,7 @@ class RetrieverManager(BasePipelineManager):
             "kendra": KendraRetriever,
             "knowledge-base-oss": KnowledgeBaseOpenSearchRetriever,
             "knowledge-base-pinecone": KnowledgeBasePineconeRetriever,
-            "pinecone": PineconeRetriever,
+            "pinecone-multivector": PineconeMultiVectorRetriever,
         }
 
         self.selected_retriever_names: list[str] = []
@@ -36,7 +36,7 @@ class RetrieverManager(BasePipelineManager):
 
 
     def set_config(self, config: dict):
-        self.embeddings_name = config.get("embedding")
+        self.embeddings_name = config.get("embeddings")
         
         if self.embeddings_name is not None:
             self.embeddings = embeddings.get_model(self.embeddings_name)
@@ -47,27 +47,30 @@ class RetrieverManager(BasePipelineManager):
 
         self.top_k = config.get("top_k", self.DEFAULT_TOP_K)
         
-        self.selected_retriever_names = config.get("retriever", [self.FALLBACK_RETRIEVER_NAME])
+        self.selected_retriever_names = config.get("retriever")
+        if self.selected_retriever_names is None:
+            msg.warn("Retriever not configured. Using fallback retriever.")
+            self.selected_retriever_names = [self.FALLBACK_RETRIEVER_NAME]
+        
         self.weights = config.get("weights", [])
         self.use_context_hierarchy = config.get("context-hierarchy", False)
 
         self.post_retrieval_config = config.get("post_retrieval", {}) # TODO
         
-        init_params = {
-            "top_k": self.top_k,
-            "embeddings": self.embeddings,
-        }
-        init_params = util.remove_falsy(init_params)
-        self.init_retriever(init_params)
+        # TODO
+        # init_params = {
+        #     "top_k": self.top_k,
+        #     "embeddings": self.embeddings,
+        # }
+        # init_params = util.remove_falsy(init_params)
+        self.init_retriever(config)
     
         
-    def _ensemble_lambda(self) -> Callable[..., BaseRAGRetriever]:
+    def _ensemble_lambda(self) -> Callable[[dict], BaseRAGRetriever]:
         if len(self.selected_retriever_names) == 1:
             msg.info(f"Setting RETRIEVER to {self.selected_retriever_names[0]}")
-            def retriever_initiator(**init_params):
-                return self.retrievers[self.selected_retriever_names[0]](
-                    **init_params
-                )
+            def retriever_initiator(config):
+                return self.retrievers[self.selected_retriever_names[0]].from_config(config)
         else:
             # ensemble retriever
             if self.weights is None:
@@ -75,39 +78,34 @@ class RetrieverManager(BasePipelineManager):
                 self.weights = [1.0] * len(self.selected_retriever_names)
             
             msg.info(f"Setting RETRIEVER to ensemble of {self.selected_retriever_names}")
-            def retriever_initiator(**init_params):
+            def retriever_initiator(config):
                 return EnsembleRetriever(
                     retrievers=[
-                        self.retrievers[retriever_name](
-                            **init_params
-                        ) for retriever_name in self.selected_retriever_names
+                        self.retrievers[retriever_name].from_config(config) for retriever_name in self.selected_retriever_names
                     ],
                     weights=self.weights,
-                    **init_params
+                    top_k=self.top_k,
                 )
         return retriever_initiator
 
     
-    def init_retriever(self, init_params: dict) -> BaseRAGRetriever:
+    def init_retriever(self, config: dict) -> BaseRAGRetriever:
         try:
             ensemble_lambda = self._ensemble_lambda()
             
-            def init_with_hierarchy(**kwargs):
-                retriever_builder = ensemble_lambda
-                return HierarchicalRetriever.from_retriever(retriever_builder, **kwargs)
-            
             msg.info(f"Use Hierarchical Retriever: {self.use_context_hierarchy}")
-            retriever_factory = init_with_hierarchy if self.use_context_hierarchy else ensemble_lambda
-            
-            retriever = retriever_factory(**init_params)
+            if self.use_context_hierarchy:
+                retriever = HierarchicalRetriever.from_retriever(ensemble_lambda(config))
+            else:
+                retriever = ensemble_lambda(config)
         except KeyError as e:
             key = e.args[0]
             msg.warn(f"Retriever {key} not found. Using fallback retriever.")
             
-            retriever = self.retrievers[self.FALLBACK_RETRIEVER_NAME](**init_params)
+            retriever = self.retrievers[self.FALLBACK_RETRIEVER_NAME].from_config(config)
         except ValueError as e:
             msg.warn(f"Error initializing retriever: {e}. Using fallback retriever.")
-            retriever = self.retrievers[self.FALLBACK_RETRIEVER_NAME](**init_params)
+            retriever = self.retrievers[self.FALLBACK_RETRIEVER_NAME].from_config(config)
         finally:
             self.selected_retriever = retriever
         
@@ -124,7 +122,6 @@ class RetrieverManager(BasePipelineManager):
         """
         retriever = self.selected_retriever
         if retriever is None:
-            msg.warn(f"Retriever is None. Skipping retrieval.")
             return []
 
         formulated_filter = FilterUtil.from_dict(filter)

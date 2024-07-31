@@ -1,6 +1,9 @@
 from typing import Generator, Optional
 from wasabi import msg
 import time
+import os
+
+from langchain_core.documents import Document
 
 from rag.managers import (
     BasePipelineManager,
@@ -8,12 +11,15 @@ from rag.managers import (
     RetrieverManager,
     GeneratorManager,
     FactVerifierManager,
+    IngestorManager
 )
 from rag.type import *
 from rag import util
+from rag.component import chunker, loader
 
 class RAGManager:
     def __init__(self) -> None:
+        self.ingestor_manager = IngestorManager()
         self.transformer_manager = TransformerManager()
         self.retriever_manager = RetrieverManager()
         self.generator_manager = GeneratorManager()
@@ -25,8 +31,8 @@ class RAGManager:
         self.config = {**config}
         self.global_config = config.get("global", {})
         
-        config_sections = ["transformation", "retrieval", "generation", "fact_verification"]
-        managers: list[BasePipelineManager] = [self.transformer_manager, self.retriever_manager, self.generator_manager, self.fact_verifier_manager]
+        config_sections = ["ingestion", "transformation", "retrieval", "generation", "fact_verification"]
+        managers: list[BasePipelineManager] = [self.ingestor_manager, self.transformer_manager, self.retriever_manager, self.generator_manager, self.fact_verifier_manager]
         for section, manager in zip(config_sections, managers):
             manager.set_config(util.merge_configs(config.get(section, {}), self.global_config))
         msg.good("RAGManager successfully configured")
@@ -43,6 +49,7 @@ class RAGManager:
 
     def retrieve(self, queries: list[str]) -> list[Chunk]:
         msg.info(f"Retrieving with: {len(queries)} queries...")
+        msg.info(f"Queries: {queries}")
         start = time.time()
         
         chunks = self.retriever_manager.retrieve(queries)
@@ -57,7 +64,7 @@ class RAGManager:
         msg.info(f"Querying with: '{query}' and {len(history)} history...")
         start = time.time()
         
-        context = util.format_chunks(chunks or [])
+        context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
         history_str = util.format_history(history or [])
         
         generation_response = self.generator_manager.generate(query, history_str, context)
@@ -72,7 +79,7 @@ class RAGManager:
         msg.info(f"Querying with: {query} and {len(history)} history...")
         start = time.time()
         
-        context = util.format_chunks(chunks or [])
+        context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
         history_str = util.format_history(history or [])
                 
         generation_response = ""
@@ -87,7 +94,8 @@ class RAGManager:
         msg.info(f"Verifying fact...")
         start = time.time()
         
-        verification_response = self.fact_verifier_manager.verify(response, chunks)
+        context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
+        verification_response = self.fact_verifier_manager.verify(response, context)
         
         end = time.time()
         msg.good(f"Fact verification completed in {end-start:.2f}s")
@@ -97,8 +105,59 @@ class RAGManager:
         msg.info(f"Verifying fact...")
         start = time.time()
         
-        for r in self.fact_verifier_manager.verify_stream(response, chunks):
+        context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
+        for r in self.fact_verifier_manager.verify_stream(response, context):
             yield r
         
         end = time.time()
         msg.good(f"Fact verification completed in {end-start:.2f}s")
+        
+    def ingest(self, data_url: str, batch_size: int = 20) -> int:
+        msg.info(f"Ingesting data from {data_url}")
+        start = time.time()
+                
+        chunks_iter = loader.lazy_load_from_s3(data_url)
+        
+        msg.good(f"Loaded documents")
+
+        chunks_cnt = util.execute_as_batch(
+            chunks_iter,
+            batch_size=batch_size,
+            func=self.ingestor_manager.ingest
+        )
+        
+        end = time.time()
+        msg.good(f"{chunks_cnt} chunks ingested in {end-start:.2f}s")
+        return chunks_cnt
+    
+    def aingest(self, data_url: str, batch_size: int = 20) -> int:
+        # TODO
+        return -1
+    
+    def ingest_from_backup(
+        self, backup_dir: str, object_location: str, batch_size: int = 20
+    ) -> int:
+        msg.info(f"Ingesting data from {backup_dir}")
+        start = time.time()
+        
+        chunks_iter = loader.lazy_load_from_backup(backup_dir, object_location)
+        
+        chunks_cnt = util.execute_as_batch(
+            chunks_iter,
+            batch_size=batch_size,
+            func=self.ingestor_manager.ingest
+        )
+        
+        end = time.time()
+        msg.good(f"{chunks_cnt} chunks ingested in {end-start:.2f}s")
+        return chunks_cnt
+
+    def upload_data(self, file_path: str, object_location: str) -> bool:
+        msg.info(f"Uploading data from {file_path} to {object_location}")
+        start = time.time()
+        
+        success = util.upload_to_s3_with_metadata(file_path, object_location=object_location)
+        
+        end = time.time()
+        msg.good(f"Data uploaded in {end-start:.2f}s")
+        return success

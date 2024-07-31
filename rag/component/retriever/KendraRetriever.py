@@ -1,17 +1,35 @@
 import os
+from wasabi import msg
+import boto3
+from botocore.config import Config
 
 from langchain_community.retrievers import AmazonKendraRetriever
 from langchain_core.documents import Document
 
-from rag.model.retrievers.base import BaseRAGRetriever
+from rag.component.retriever.base import BaseRAGRetriever
 from rag.type import *
 
 class KendraRetriever(BaseRAGRetriever):
     def __init__(self, top_k: int = 5, **kwargs) -> None:
         super().__init__(top_k)
+        
+        # init client manually, to prevent ThrottlingException from boteocore.
+        client_config = Config(
+            retries = dict(
+                max_attempts = 10,
+            )
+        )
+        boto3_session = boto3.Session()
+        client = boto3_session.client(
+            "kendra", 
+            region_name=self.region_name,
+            config=client_config,
+        )
+        
         self.retriever = AmazonKendraRetriever(
             index_id = self.kendra_index_id,
-            region_name = self.region_name,
+            # region_name = self.region_name,
+            client=client,
             top_k = self.top_k,
         )
     
@@ -24,10 +42,17 @@ class KendraRetriever(BaseRAGRetriever):
             filter_dict = self._arange_filter(filter)
             self.retriever.attribute_filter = filter_dict
 
-        retrieved_chunks_raw = self.retriever.batch(queries)
-        retrieved_chunks_raw = sum(retrieved_chunks_raw, [])
-        retrieved_chunks = [self.process_chunk(chunks_raw) for chunks_raw in retrieved_chunks_raw]
-        return retrieved_chunks
+        try:
+            retrieved_chunks_raw = self.retriever.batch(queries)
+            retrieved_chunks_raw = sum(retrieved_chunks_raw, [])
+            retrieved_chunks = [self.process_chunk(chunks_raw) for chunks_raw in retrieved_chunks_raw]
+            
+            # sort by score
+            retrieved_chunks = sorted(retrieved_chunks, key=lambda x: x.score, reverse=True)[:self.top_k]
+            return retrieved_chunks
+        except Exception as e:
+            msg.warn(f"Error occurred during retrieval using {self.__class__.__name__}: {e}")
+            return []
     
     def _arange_filter(self, filter: Filter) -> dict:
         op_map = {
@@ -71,11 +96,11 @@ class KendraRetriever(BaseRAGRetriever):
         if score == "VERY_HIGH":
             return 1.0
         elif score == "HIGH":
-            return 0.8
+            return 0.75
         elif score == "MEDIUM":
             return 0.5
         elif score == "LOW":
-            return 0.3
+            return 0.25
         else:
             return 0.1
         
@@ -109,3 +134,8 @@ class KendraRetriever(BaseRAGRetriever):
             "page": metadata.get("document_attributes", {}).get("_excerpt_page_number", -1),
         }
         return doc_meta, chunk_meta
+    
+    @classmethod
+    def from_config(cls, config: dict) -> BaseRAGRetriever:
+        top_k = config.get("top_k", cls.DEFAULT_TOP_K)
+        return cls(top_k=top_k)

@@ -1,8 +1,9 @@
 import streamlit as st
+from wasabi import msg
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from rag.type import Chunk
+from rag.type import Chunk, CombinedChunks
 from rag.util import combine_chunks
 
 def session_init(session_state):
@@ -16,6 +17,7 @@ def display_chat_history(session_state):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
+# TODO route to different writer based on the config(context-hierarchy)
 def write_source_docs(chunks: list[Chunk]):
     combined_chunks = combine_chunks(chunks, attach_url=True)
     
@@ -24,35 +26,33 @@ def write_source_docs(chunks: list[Chunk]):
     
     # base
     st.divider()
-    st.markdown(f"## Base Documents({sum([len(combined_chunk.chunks) for combined_chunk in combined_base_chunks])} chunks)")
-    for combined_chunk in combined_base_chunks:
-        st.markdown(f"### Document: {combined_chunk.doc_meta.get('doc_name', '')}")        
-        st.write(f"Average Score: {combined_chunk.doc_mean_score:.2f}")
-        if combined_chunk.link:
-            st.write(f"URL: {combined_chunk.link}")
-        for chunk in (combined_chunk.chunks):
-            st.markdown(f"#### Chunk ({chunk.chunk_id})")
-            st.write(f"Score: {chunk.score:.2f}")
-            st.write(f"Content")
-            st.write(chunk.text)
-            
-            if chunk.chunk_meta.get("page"):
-                st.write(f"Page: {chunk.chunk_meta['page']}")
+    st.markdown(f"# Base Documents({sum([len(combined_chunk.chunks) for combined_chunk in combined_base_chunks])} chunks)")
+    write_combined_chunks(combined_base_chunks)
     
     # additional
     st.divider()
-    st.markdown(f"## Additional Documents({sum([len(combined_chunk.chunks) for combined_chunk in combined_additional_chunks])} chunks)")
-    for combined_chunk in combined_additional_chunks:
-        st.markdown(f"### Document: {combined_chunk.doc_meta.get('doc_name', '')}")
-        st.write(f"Based on: {combined_chunk.doc_meta.get('base_doc_id', '')}")
+    st.markdown(f"# Additional Documents({sum([len(combined_chunk.chunks) for combined_chunk in combined_additional_chunks])} chunks)")
+    write_combined_chunks(combined_additional_chunks)
+
+def write_combined_chunks(combined_chunks: list[CombinedChunks]) -> None:
+    for i, combined_chunk in enumerate(combined_chunks):
+        st.markdown(f"## Document: {combined_chunk.doc_meta.get('doc_name', '')}")
+        if combined_chunk.doc_meta.get("base_doc_id"):
+            st.write(f"Based on: {combined_chunk.doc_meta.get('base_doc_id')}")
         st.write(f"Average Score: {combined_chunk.doc_mean_score:.2f}")
         if combined_chunk.link:
-            st.write(f"URL: {combined_chunk.link}")
+            st.write(f"URL: [link]({combined_chunk.link})")
         for chunk in (combined_chunk.chunks):
-            st.markdown(f"#### Chunk ({chunk.chunk_id})")
-            st.write(f"Score: {chunk.score:.2f}")
-            st.write(f"Content")
-            st.write(chunk.text)
-            
+            st.markdown(f"### Chunk ({chunk.chunk_id})")
+            st.write(f"#### Score: {chunk.score:.2f}")
+            st.write(f"#### Content")
             if chunk.chunk_meta.get("page"):
-                st.write(f"Page: {chunk.chunk_meta['page']}")
+                try:
+                    st.write(f"Page: {int(chunk.chunk_meta['page'])}")
+                except ValueError:
+                    msg.warn(f"Page number is not an integer: {chunk.chunk_meta['page']}")
+                    
+            st.write(chunk.text)
+        
+        if i < len(combined_chunks) - 1:
+            st.divider()

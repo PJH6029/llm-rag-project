@@ -1,7 +1,7 @@
 from wasabi import msg
 from typing import Type, Callable
 
-from rag.model.retrievers.base import BaseRAGRetriever, FilterUtil
+from rag.component.retriever.base import BaseRAGRetriever, FilterUtil
 from rag.type import *
 
 
@@ -14,8 +14,7 @@ class HierarchicalRetriever(BaseRAGRetriever):
     """
     
     @classmethod
-    def from_retriever(cls, retriever_builder: Callable[..., BaseRAGRetriever], **kwargs) -> "HierarchicalRetriever":
-        retriever = retriever_builder(**kwargs)
+    def from_retriever(cls, retriever: BaseRAGRetriever) -> "HierarchicalRetriever":
         return cls(retriever)
         
     def __init__(
@@ -33,7 +32,6 @@ class HierarchicalRetriever(BaseRAGRetriever):
         base_chunks = self.retriever.retrieve(
             queries, filter=FilterUtil.from_dict({"equals": {"key": "category", "value": "base"}})
         )
-        # managed_base_chunks = self.rerank(base_chunks) # TODO topk
         managed_base_chunks = base_chunks[:int(self.top_k * self.base_ratio)]
         
         # additional context retrieval
@@ -46,7 +44,6 @@ class HierarchicalRetriever(BaseRAGRetriever):
                 ]
             })
         )
-        # managed_additional_chunks = self.rerank(additional_chunks) # TODO topk
         managed_additional_chunks = additional_chunks[:self.top_k - len(managed_base_chunks)]
         
         chunks = managed_base_chunks + managed_additional_chunks
@@ -68,7 +65,8 @@ class HierarchicalRetriever(BaseRAGRetriever):
                 category = chunk.doc_meta.get("category")
                 assert category in ["base", "additional"]
         except Exception as e:
-            msg.warn(f"Validation failed: {e}")
+            msg.fail(f"Validation failed: {e} Category should be in ['base', 'additional']")
+            return
         
         # base doc id of additional chunks should be in base chunks
         try:
@@ -81,12 +79,8 @@ class HierarchicalRetriever(BaseRAGRetriever):
                     base_doc_id = chunk.doc_meta.get("base_doc_id")
                     assert base_doc_id in base_chunk_ids
         except Exception as e:
-            msg.fail(f"Validation failed: {e}")
+            msg.fail(f"Validation failed: {e} Base doc id of additional chunks should be in base chunks")
+            return
         
         msg.good("Validation passed.")
         return
-    
-    def rerank(self, chunks: list[Chunk]) -> list[Chunk]:
-        # TODO
-        # assume chunks are already sorted by score
-        return chunks[:self.top_k]

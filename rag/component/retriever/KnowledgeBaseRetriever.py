@@ -4,7 +4,7 @@ import os
 from langchain_community.retrievers import AmazonKnowledgeBasesRetriever
 from langchain_core.documents import Document
 
-from rag.model.retrievers.base import BaseRAGRetriever
+from rag.component.retriever.base import BaseRAGRetriever
 from rag.type import *
 from rag.util import generate_id
 
@@ -34,10 +34,12 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
             }
         )
     
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if cls._set_env is BaseRAGRetriever._set_env:
-            msg.warn("KnowledgeBaseRetriever subclass should implement _set_env method")
+    def _set_env(self):
+        """Override this method to set knowledge_base_id and region_name.
+        """
+        self.knowledge_base_id = os.environ["KNOWLEDGE_BASE_ID"]
+        self.region_name = os.environ["AWS_REGION"]
+        
         
     
     def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
@@ -58,6 +60,7 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
         retrieved_chunks_raw = self.retriever.batch(queries)
         retrieved_chunks_raw = sum(retrieved_chunks_raw, [])
         retrieved_chunks = [self.process_chunk(chunks_raw) for chunks_raw in retrieved_chunks_raw]
+        retrieved_chunks = sorted(retrieved_chunks, key=lambda x: x.score, reverse=True)[:self.top_k]
         return retrieved_chunks
 
     def _arange_filter(self, filter: Filter) -> dict:
@@ -118,6 +121,11 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
             "score": metadata["score"],
         }
         return doc_meta, chunk_meta
+
+    @classmethod
+    def from_config(cls, config: dict) -> BaseRAGRetriever:
+        top_k = config.get("top_k", cls.DEFAULT_TOP_K)
+        return cls(top_k=top_k)
 
 class KnowledgeBaseOpenSearchRetriever(KnowledgeBaseRetriever):
     def _set_env(self):

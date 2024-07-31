@@ -4,7 +4,7 @@ from typing import Optional, Iterator, Iterable, Callable, Any, TypeVar, Hashabl
 from itertools import chain
 from collections import defaultdict
 
-from rag.model.retrievers.base import BaseRAGRetriever
+from rag.component.retriever.base import BaseRAGRetriever
 from rag.type import *
 from rag.util import generate_id
 

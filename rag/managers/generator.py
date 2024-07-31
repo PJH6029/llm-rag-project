@@ -4,7 +4,7 @@ from typing import Generator, Optional
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable
 
-from rag.model import llm, prompt
+from rag.component import llm, prompt
 from rag.managers.base import BasePipelineManager
 from rag.type import Chunk, ChatLog
 from rag import util

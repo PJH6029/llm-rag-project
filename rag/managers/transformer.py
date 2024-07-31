@@ -2,7 +2,7 @@ from wasabi import msg
 
 from langchain_core.output_parsers import StrOutputParser
 
-from rag.model import llm, prompt
+from rag.component import llm, prompt
 from rag.managers.base import BasePipelineManager
 from rag.type import *
 
@@ -42,7 +42,7 @@ class TransformerManager(BasePipelineManager):
             sentence = self.hyde(sentence, history)
             sentences.append(sentence)
 
-        return list(set(sentences)) # remove duplicates
+        return list(dict.fromkeys(sentences)) # remove duplicates, preserving order
     
     def translate(self, sentence: str) -> str:
         transformer = llm.get_model(self.transformer_name)

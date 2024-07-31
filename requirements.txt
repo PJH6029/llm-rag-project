@@ -5,6 +5,8 @@ langchain-community
 langchain-openai
 langchain-core
 langchain-pinecone
+langchain-upstage
+langchain-unstructured
 boto3
 wasabi
 tiktoken
@@ -13,3 +15,14 @@ pypdf
 pydantic
 pinecone-client
 pinecone-text
+amazon-textract-caller
+amazon-textract-textractor
+# rapidocr-onnxruntime
+# unstructured
+# unstructured-inference
+# unstructured.pytesseract
+unstructured-client
+pdfminer.six
+pillow_heif
+matplotlib
+pytesseract

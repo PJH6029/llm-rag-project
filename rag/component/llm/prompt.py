@@ -77,6 +77,7 @@ If you don't know the answer, just say that you don't know.
 You can answer in descriptive form or paraphrased form if you want, and keep the answer concise.
 
 You should answer with the format of the example answer below.
+When you reference the documents, you should provide the exact title of the document.
 Feel free to use markdown to format your answer.
 
 --------------------------------------------------

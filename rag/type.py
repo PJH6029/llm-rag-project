@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.embeddings import Embeddings
+from langchain_core.documents import Document
 
 ChatLog = dict[Literal["role", "content"], str]
 GenerationResult = dict[Literal["generation", "fact_verification"], str]
@@ -32,7 +33,17 @@ class Chunk(BaseModel):
             f"TEXT:\n {self.text}\n"
             f"CHUNK META:\n {self.chunk_meta}\n"
         ) + (f"DOC META:\n {self.doc_meta}" if doc_meta else "")
-
+    
+    def to_document(self) -> Document:
+        return Document(
+            page_content=self.text,
+            metadata={
+                "chunk_id": self.chunk_id,
+                "doc_id": self.doc_id,
+                "doc_meta": self.doc_meta,
+                "chunk_meta": self.chunk_meta,
+            }
+        )
 
 
 class CombinedChunks(BaseModel):

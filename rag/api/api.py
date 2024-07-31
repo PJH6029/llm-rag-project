@@ -20,29 +20,40 @@ def init(config: dict=None):
     rag_manager = RAGManager()
     _config = {
         "global": {
-            "context-hierarchy": False, # used in selecting retriever and generation prompts
+            "context-hierarchy": True, # used in selecting retriever and generation prompts
+        },
+        "ingestion": { # optional
+            "ingestor": "pinecone-multivector",
+            "embeddings": "text-embedding-3-small",
+            "namespace": "parent-upstage-overlap-backup",
+            "sub-namespace": "child-upstage-overlap-backup",
         },
         "transformation": { # optional
             "model": "gpt-4o-mini",
             "enable": {
                 "translation": True,
-                "rewriting": False,
+                "rewriting": True,
                 "expansion": False,
-                "hyde": False,
+                "hyde": True,
             },
         },
         "retrieval": { # mandatory
-            "retriever": ["kendra"],
+            # "retriever": ["pinecone-multivector", "kendra"],
+            "retriever": ["pinecone-multivector"],
+            # "retriever": ["kendra"],
             # "weights": [0.5, 0.5],
-            # "embedding": "amazon.titan-embed-text-v1", # may be optional
-            "top_k": 7,
+            "namespace": "parent-upstage-overlap-backup",
+            "sub-namespace": "child-upstage-overlap-backup",
+            
+            "embeddings": "text-embedding-3-small", # may be optional
+            "top_k": 3, # for multi-vector retriever, context size is usually big. Use small top_k
             "post_retrieval": {
                 "rerank": True,
                 # TODO
             }
         },
         "generation": { # mandatory
-            "model": "gpt-4o-mini",
+            "model": "gpt-4o",
         },
         "fact_verification": { # optional
             "model": "gpt-4o-mini",
@@ -93,16 +104,14 @@ def query_stream(query: str, history: list[ChatLog]=None) -> Generator[Generatio
         
         print(cb)
     
-def upload_data(data: Any):
-    # 1. upload to s3
-    # 2. ingest
-    pass    
+def upload_data(file_path: str, object_location: str) -> bool:
+    return rag_manager.upload_data(file_path, object_location)
 
-def ingest_data(data: Any):
-    # 1. download to local from s3 with metadata
-    # 2. split
-    # 3. embed
-    # 4. upload to vectorstore
-    pass
+def ingest_data(s3_url: str) -> int:
+    return rag_manager.ingest(s3_url)
 
-# TODO ingesting logic may be different between vectorstores. Need to abstract this.
+async def aingest_data(s3_url: str) -> int:
+    return await rag_manager.aingest(s3_url)
+
+def ingest_from_backup(backup_dir: str, object_location: str) -> int:
+    return rag_manager.ingest_from_backup(backup_dir, object_location)

@@ -12,3 +12,6 @@ evaluate/evaluation/*
 evaluate/experiment/*
 evaluate/reference/*
 .streamlit/secrets.toml
+layout_backup/*
+layout_overlay_backup/*
+layout*/*

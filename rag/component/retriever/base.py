@@ -6,6 +6,7 @@ from langchain_core.embeddings import Embeddings
 from rag.type import *
 
 class BaseRAGRetriever:
+    DEFAULT_TOP_K = 5
     def __init__(self, top_k: int=5, **kwargs) -> None:
         self.top_k = top_k
         self._set_env()
@@ -21,6 +22,10 @@ class BaseRAGRetriever:
         raise NotImplementedError()
     
     def process_chunk(self, chunk_raw: Document) -> Chunk:
+        raise NotImplementedError()
+    
+    @classmethod
+    def from_config(cls, config: dict) -> "BaseRAGRetriever":
         raise NotImplementedError()
     
 

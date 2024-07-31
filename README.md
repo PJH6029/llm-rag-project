@@ -36,3 +36,12 @@ _config = {
     },
 }
 ```
+
+# Installation (for unstructured)
+[installation guide](https://python.langchain.com/v0.2/docs/integrations/providers/unstructured/)
+
+- poppler-utils
+- tesseract-ocr
+- libtesseract-dev
+
+
