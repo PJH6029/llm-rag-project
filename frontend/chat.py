@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 
 from frontend.util import *
 from rag.api import api as rag_api
@@ -48,4 +49,4 @@ def run():
         )
 
         # TODO visualize pipline
-    print("hi there")
+    os.write(1, b"Hi there\n")
