@@ -48,4 +48,4 @@ def run():
         )
 
         # TODO visualize pipline
-    print("", flush=True) # TODO see log in deployed app
+    print("hi there")
