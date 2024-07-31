@@ -1,5 +1,5 @@
 import streamlit as st
-import os
+import os, logging
 
 from frontend.util import *
 from rag.api import api as rag_api
@@ -49,4 +49,5 @@ def run():
         )
 
         # TODO visualize pipline
-    os.write(1, b"Hi there\n")
+    # os.write(1, b"Hi there\n")
+    logging.info("Hi there")
