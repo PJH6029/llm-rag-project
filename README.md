@@ -6,42 +6,44 @@
 # rag.api.py
 _config = {
     "global": {
-        "context-hierarchy": False, # used in selecting retriever and generation prompts
+        "context-hierarchy": True, # used in selecting retriever and generation prompts
+    },
+    "ingestion": { # optional
+        "ingestor": "pinecone-multivector",
+        "embeddings": "text-embedding-3-small",
+        "namespace": "parent-upstage-overlap-backup",
+        "sub-namespace": "child-upstage-overlap-backup",
     },
     "transformation": { # optional
         "model": "gpt-4o-mini",
         "enable": {
             "translation": True,
-            "rewriting": False,
+            "rewriting": True,
             "expansion": False,
-            "hyde": False,
+            "hyde": True,
         },
     },
     "retrieval": { # mandatory
-        "retriever": ["pinecone", "knowledge-base-pinecone"],
+        # "retriever": ["pinecone-multivector", "kendra"],
+        "retriever": ["pinecone-multivector"],
+        # "retriever": ["kendra"],
         # "weights": [0.5, 0.5],
-        "embedding": "amazon.titan-embed-text-v1", # may be optional
-        "top_k": 7,
+        "namespace": "parent-upstage-overlap-backup",
+        "sub-namespace": "child-upstage-overlap-backup",
+        
+        "embeddings": "text-embedding-3-small", # may be optional
+        "top_k": 3, # for multi-vector retriever, context size is usually big. Use small top_k
         "post_retrieval": {
             "rerank": True,
             # TODO
         }
     },
     "generation": { # mandatory
-        "model": "gpt-4o-mini",
+        "model": "gpt-4o",
     },
     "fact_verification": { # optional
         "model": "gpt-4o-mini",
         "enable": False
-    },
+    }
 }
 ```
-
-# Installation (for unstructured)
-[installation guide](https://python.langchain.com/v0.2/docs/integrations/providers/unstructured/)
-
-- poppler-utils
-- tesseract-ocr
-- libtesseract-dev
-
-
