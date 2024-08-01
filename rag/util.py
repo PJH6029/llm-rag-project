@@ -67,19 +67,24 @@ def combine_chunks(chunks: list[Chunk], attach_url=False) -> list[CombinedChunks
     combined_chunks_list = sorted(combined_chunks_list, key=lambda x: x.doc_mean_score, reverse=True)
     return combined_chunks_list
 
-def format_chunks_single_context(chunks: list[Chunk]) -> str:
-    combined_chunks = combine_chunks(chunks)
-    
+def _format_combined_chunks(combined_chunks: list[CombinedChunks]) -> str:
     result = ""
     for combined_chunk in combined_chunks:
         result += f"--- Document: {combined_chunk.doc_meta.get('doc_name', '')} ---\n"
+        if combined_chunk.doc_meta.get("base_doc_id"):
+            result += f"Based on: {combined_chunk.doc_meta.get('base_doc_id')}\n"
         result += f"Average Score: {combined_chunk.doc_mean_score}\n"
         result += f"META:\n {combined_chunk.doc_meta}\n\n"
         for chunk in combined_chunk.chunks:
             result += f"{chunk.detail(doc_meta=False)}\n\n"
-            
     return result
 
+def format_chunks_single_context(chunks: list[Chunk]) -> str:
+    combined_chunks = combine_chunks(chunks)
+    
+    return _format_combined_chunks(combined_chunks)
+
+# TODO resolve lost in middle problem. Make high score base chunks and additional chunks physically close to each other.
 def format_chunks_hierarchy_context(chunks: list[Chunk]) -> str:
     combined_chunks = combine_chunks(chunks)
     context = {
@@ -91,21 +96,10 @@ def format_chunks_hierarchy_context(chunks: list[Chunk]) -> str:
     additional_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("category") == "additional"]
     
     # base
-    for combined_chunk in base_chunks:
-        context["base"] += f"--- Document: {combined_chunk.doc_meta.get('doc_name', '')} ---\n"
-        context["base"] += f"Average Score: {combined_chunk.doc_mean_score}\n"
-        context["base"] += f"META:\n {combined_chunk.doc_meta}\n\n"
-        for chunk in combined_chunk.chunks:
-            context["base"] += f"{chunk.detail(doc_meta=False)}\n\n"
+    context["base"] = _format_combined_chunks(base_chunks)
     
     # additional
-    for combined_chunk in additional_chunks:
-        context["additional"] += f"--- Document: {combined_chunk.doc_meta.get('doc_name', '')} ---\n"
-        context["additional"] += f"Based on: {combined_chunk.doc_meta.get('base_doc_id', '')}\n"
-        context["additional"] += f"Average Score: {combined_chunk.doc_mean_score}\n"
-        context["additional"] += f"META:\n {combined_chunk.doc_meta}\n\n"
-        for chunk in combined_chunk.chunks:
-            context["additional"] += f"{chunk.detail(doc_meta=False)}\n\n"
+    context["additional"] = _format_combined_chunks(additional_chunks)
     
     context_str = (
         "<base-context>\n"

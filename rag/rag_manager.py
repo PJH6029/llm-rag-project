@@ -81,7 +81,7 @@ class RAGManager:
         
         context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
         history_str = util.format_history(history or [])
-                
+                        
         generation_response = ""
         for r in self.generator_manager.generate_stream(query, history_str, context):
             yield r

@@ -114,6 +114,7 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
                 return []
             
             # normalize scores using min-max scaling
+            # TODO better normalization?
             for key in id_scores:
                 id_scores[key] = sum(id_scores[key])
             min_score = min(id_scores.values())
