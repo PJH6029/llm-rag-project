@@ -88,7 +88,6 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             sub_chunk_cnt = 0
             
             sub_chunks = self._get_retrieval_chain(len(queries)).invoke({"queries": queries, "filter": filter_dict, "top_k": int(self.top_k * self.PARENT_CHILD_FACTOR)})
-            print(sub_chunks)
             sub_chunk_cnt = len(sub_chunks)
             
             for sub_chunk in sub_chunks:
