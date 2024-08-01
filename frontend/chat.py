@@ -9,7 +9,7 @@ def run():
     session_init(st.session_state)
     display_chat_history(st.session_state)
 
-    if user_input := st.chat_input("Enter a message..."):
+    if user_input := st.chat_input("Enter a message (줄임말은 정확도를 떨어뜨릴 수 있습니다)..."):
         with st.chat_message("user"):
             st.markdown(user_input)
             
@@ -17,7 +17,7 @@ def run():
             
             rag_generator = rag_api.query_stream(query=user_input, history=st.session_state.translated_messages[:])
             
-            with st.status("Transforming query...") as status:
+            with st.status("Understaning question...") as status:
                 start = time.time()
                 transformed_queries = next(rag_generator).get("transformation")
                 if transformed_queries:
@@ -25,9 +25,10 @@ def run():
                 else:
                     msg.warn("No transformation found. Check the query.")
                 end = time.time()
-                status.update(label=f"Transformed into {len(transformed_queries)} queries in {end-start:.2f} seconds.")
+                status.update(label=f"Understanding question... ({end-start:.2f} seconds)")
+                # status.update(label=f"Transformed into {len(transformed_queries)} queries in {end-start:.2f} seconds.")
             
-            with st.status("Retrieving data...") as status:
+            with st.status("Looking for relevant contents...") as status:
                 start = time.time()
                 chunks = next(rag_generator).get("retrieval")
                 if chunks:
@@ -35,7 +36,8 @@ def run():
                 else:
                     msg.warn("No data found. Check the retrieval result.")
                 end = time.time()
-                status.update(label=f"{len(chunks)} chunks retrieved in {end-start:.2f} seconds.")
+                status.update(label=f"Looking for relevant contents... ({end-start:.2f} seconds)")
+                # status.update(label=f"{len(chunks)} chunks retrieved in {end-start:.2f} seconds.")
             
         
             response = st.write_stream(
