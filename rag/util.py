@@ -159,11 +159,11 @@ def doc_to_chunk(document: Document) -> Chunk:
         
         chunk = Chunk(
             text=document.page_content,
-            doc_id=document.metadata["doc_id"],
+            doc_id=MetadataSearch.search_doc_id(document.metadata),
             chunk_id=chunk_id,
             doc_meta={
                 **document.metadata,
-                "source": document.metadata.get("source") or document.metadata.get("doc_id"),
+                "source": MetadataSearch.search_source(document.metadata),
             },
             chunk_meta={
                 "chunk_id": chunk_id,
@@ -294,3 +294,40 @@ def execute_as_batch(
             func(batch)
     
     return item_cnt
+
+class MetadataSearch:
+    @staticmethod
+    def search_doc_id(metadata: dict) -> Optional[str]:
+        doc_id = metadata.get("doc_meta", {}).get("doc_id")
+        if doc_id:
+            return doc_id
+        
+        doc_id = metadata.get("doc_id")
+        if doc_id:
+            return doc_id
+        
+        return None
+    
+    @staticmethod
+    def search_chunk_id(metadata: dict) -> Optional[str]:
+        chunk_id = metadata.get("chunk_meta", {}).get("chunk_id")
+        if chunk_id:
+            return chunk_id
+        
+        chunk_id = metadata.get("chunk_id")
+        if chunk_id:
+            return chunk_id
+        
+        return None
+    
+    @staticmethod
+    def search_source(metadata: dict) -> Optional[str]:
+        source = metadata.get("doc_meta", {}).get("source")
+        if source:
+            return source
+        
+        source = metadata.get("source")
+        if source:
+            return source
+        
+        return MetadataSearch.search_doc_id(metadata)

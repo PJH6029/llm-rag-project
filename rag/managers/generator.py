@@ -52,7 +52,7 @@ class GeneratorManager(BasePipelineManager):
             msg.warn("Generator not set. Skipping generation.")
             return None
         
-        generator = llm.get_model(self.generator_name)
+        generator = llm.get_model(self.generator_name, temperature=0.0)
         if generator is None:
             msg.warn(f"Generator {self.generator_name} not found. Skipping generation.")
             return None

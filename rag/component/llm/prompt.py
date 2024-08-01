@@ -7,7 +7,7 @@ I will give you the sentence.
 If the sentence is already written in English, just copy the sentence.
 If not, please translate the sentence from Korean to English.
 
-You should say only the translation of the sentence, and don't say any additional information.
+You should say only the translation of the sentence, and do not say any additional information.
 
 <sentence>
 {sentence}
@@ -36,13 +36,34 @@ Revised question:
 rewrite_prompt = ChatPromptTemplate.from_template(rewrite_prompt_template)
 
 expansion_prompt_template = """
-"""
-expansion_prompt = ChatPromptTemplate.from_template(expansion_prompt_template)
+Your task is to expand the given query, considering the chat history.
+Generate {n} queries that are related to the given query and chat history.
 
+You should provide the queries in English.
+
+All the queries should be separated by a newline.
+Do not include any additional information. Only provide the queries.
+
+<chat-history>
+{history}
+</chat-history>
+
+<question>
+{query}
+</question>
+
+Queries:
+"""
+expansion_prompt = ChatPromptTemplate.from_template(expansion_prompt_template).partial(n=3)
+
+# restrice the number of sentences to 3, to improve response latency
 hyde_prompt_template = """
 You are an assistant for question-answering tasks.
 Please write a passage to answer the question, considering the given chat history.
+Even though you cannot find the context in the chat history, you should generate a passage to answer the question.
 Write the answer in English.
+
+Use up to {n} sentences to answer the question.
 
 <chat-history>
 {history}
@@ -54,7 +75,7 @@ Write the answer in English.
 
 Answer:
 """
-hyde_prompt = ChatPromptTemplate.from_template(hyde_prompt_template)
+hyde_prompt = ChatPromptTemplate.from_template(hyde_prompt_template).partial(n=3)
 
 generation_with_hierarchy_prompt_template = """
 You are an assistant for question-answering tasks.
@@ -69,8 +90,7 @@ which are made according to the version updates of the documents or by the reque
 You should think step by step.
 You should first find the answer from the base context,
 and then consider the additional context to see if there are any updates or changes to the answer.
-If there are several changes, you should consider the most recent additional context to provide the most up-to-date answer,
-also comparing the changes to the base context.
+If there are several changes, you should consider the additional context of the most recent version to provide the most up-to-date answer, also comparing the changes to the base context.
 
 If you don't know the answer, just say that you don't know.
 
@@ -343,8 +363,10 @@ Answer:
 generation_without_hierarchy_prompt = ChatPromptTemplate.from_template(generation_without_hierarchy_prompt_template)
 
 verification_prompt_template = """
-Given context, verify the fact
+Given context, verify the fact in the response. If the response is correct, say "Yes". If not, say "No".
 Context: {context}
 Answer: {response}
+
+Verification:
 """
 verification_prompt = ChatPromptTemplate.from_template(verification_prompt_template)

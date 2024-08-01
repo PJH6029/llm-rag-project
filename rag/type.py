@@ -5,12 +5,6 @@ from langchain_core.language_models import BaseLanguageModel
 from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document
 
-ChatLog = dict[Literal["role", "content"], str]
-GenerationResult = dict[Literal["generation", "fact_verification"], str]
- 
-AnyLanguageModel = Union[BaseLanguageModel]
-AnyEmbeddings = Union[Embeddings]
-
 class Chunk(BaseModel):
     text: str
     doc_id: str
@@ -83,3 +77,9 @@ class FilterExpression(BaseModel):
         return {self.op: [predicate.dict() for predicate in self.predicates]}
 
 Filter = Union[FilterPredicate, FilterExpression]
+
+ChatLog = dict[Literal["role", "content"], str]
+GenerationResult = dict[Literal["transformation", "retrieval", "generation", "fact_verification"], Union[str, list[Chunk], list[str]]]
+ 
+AnyLanguageModel = Union[BaseLanguageModel]
+AnyEmbeddings = Union[Embeddings]

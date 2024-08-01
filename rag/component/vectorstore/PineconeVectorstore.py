@@ -74,11 +74,10 @@ class PineconeVectorstore(BaseRAGVectorstore):
         chunks = []
         for chunk_raw, score in zip(retrieved_chunks_raw, scores):
             restored_metadata = util.deflatten_dict(chunk_raw.metadata)
-            # pprint.pprint(restored_metadata)
             chunks.append(Chunk(
                 text=chunk_raw.page_content,
-                doc_id=restored_metadata["doc_id"],
-                chunk_id=restored_metadata["chunk_id"],
+                doc_id=util.MetadataSearch.search_doc_id(restored_metadata),
+                chunk_id=util.MetadataSearch.search_chunk_id(restored_metadata),
                 doc_meta=restored_metadata["doc_meta"],
                 chunk_meta={**restored_metadata["chunk_meta"], "score": score},
                 score=score,

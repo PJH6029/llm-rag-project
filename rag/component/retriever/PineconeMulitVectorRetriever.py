@@ -1,9 +1,12 @@
 import os
 from typing import Optional
-from langchain_core.documents import Document
 from wasabi import msg
 
 from pinecone import Pinecone, Index
+
+from langchain_core.documents import Document
+from langchain_core.runnables import RunnableParallel, Runnable, RunnableLambda
+
 
 from rag.component.vectorstore.base import BaseRAGVectorstore
 from rag.component.vectorstore.PineconeVectorstore import PineconeVectorstore
@@ -29,6 +32,51 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
         self.sub_vectorstore = sub_vectorstore
         self._parent_id_key = parent_id_key
     
+    def _get_retrieval_chain(self, chain_num: int) -> Runnable:
+        """Create a retrieval chain that retrieves chunks in parallel.
+
+        Args:
+            chain_num (int): The number of chains to create. Equals to the number of queries.
+
+        Returns:
+            RunnableParallel: The retrieval chain.
+        """
+        def _runnable_input_parser(_dict):
+            queries = _dict["queries"]
+            filter_dict = _dict["filter"]
+            top_k = _dict["top_k"]
+
+            result = {}
+            for i in range(chain_num):
+                result[f"query_{i}"] = queries[i]
+            result["filter"] = filter_dict
+            result["top_k"] = top_k
+            return result
+        runnable_input_parser = RunnableLambda(_runnable_input_parser)
+        
+        def _runnable_output_parser(_dict):
+            result = sum([_dict[f"query_{i}"] for i in range(chain_num)], [])
+            return result
+        runnable_output_parser = RunnableLambda(_runnable_output_parser)
+        
+        def _build_query_chain(i: int) -> Runnable:            
+            def _query_chain(_dict):
+                query = _dict[f"query_{i}"]
+                filter_dict = _dict["filter"]
+                top_k = _dict["top_k"]
+                
+                return self.sub_vectorstore.query(query, top_k=top_k, filter=filter_dict)
+            return RunnableLambda(_query_chain)
+        
+        parrallel_kwargs = {}
+        for i in range(chain_num):
+            parrallel_kwargs[f"query_{i}"] = _build_query_chain(i)
+        
+        runnable_parallel = RunnableParallel(**parrallel_kwargs)
+        
+        chain = runnable_input_parser | runnable_parallel | runnable_output_parser
+        return chain
+    
     def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:  
         try:
             if filter is not None:
@@ -38,20 +86,32 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
 
             id_scores = dict()
             sub_chunk_cnt = 0
-            for query in queries:
-                sub_chunks = self.sub_vectorstore.query(query, top_k=self.top_k * self.PARENT_CHILD_FACTOR, filter=filter_dict)
-                sub_chunk_cnt += len(sub_chunks)
+            
+            sub_chunks = self._get_retrieval_chain(len(queries)).invoke({"queries": queries, "filter": filter_dict, "top_k": int(self.top_k * self.PARENT_CHILD_FACTOR)})
+            print(sub_chunks)
+            sub_chunk_cnt = len(sub_chunks)
+            
+            for sub_chunk in sub_chunks:
+                if self._parent_id_key in sub_chunk.chunk_meta:
+                    if sub_chunk.chunk_meta[self._parent_id_key] not in id_scores:
+                        id_scores[sub_chunk.chunk_meta[self._parent_id_key]] = []
+                    id_scores[sub_chunk.chunk_meta[self._parent_id_key]].append(sub_chunk.score)
+            
+            # deprecated. Use parallel retrieval
+            # for query in queries:
+            #     sub_chunks = self.sub_vectorstore.query(query, top_k=int(self.top_k * self.PARENT_CHILD_FACTOR), filter=filter_dict)
+            #     sub_chunk_cnt += len(sub_chunks)
                 
-                for sub_chunk in sub_chunks:
-                    if self._parent_id_key in sub_chunk.chunk_meta:
-                        if sub_chunk.chunk_meta[self._parent_id_key] not in id_scores:
-                            id_scores[sub_chunk.chunk_meta[self._parent_id_key]] = []
-                        id_scores[sub_chunk.chunk_meta[self._parent_id_key]].append(sub_chunk.score)
+            #     for sub_chunk in sub_chunks:
+            #         if self._parent_id_key in sub_chunk.chunk_meta:
+            #             if sub_chunk.chunk_meta[self._parent_id_key] not in id_scores:
+            #                 id_scores[sub_chunk.chunk_meta[self._parent_id_key]] = []
+            #             id_scores[sub_chunk.chunk_meta[self._parent_id_key]].append(sub_chunk.score)
             
             # retrieve parent chunks
             retrieved_chunks_raw = self.vectorstore.fetch_docs(list(id_scores.keys()))
             if not retrieved_chunks_raw:
-                msg.warn(f"No parent chunks retrieved, based on {sub_chunk_cnt} sub chunks")
+                msg.warn(f"Retrieved 0 chunks from parent vectorstore, based on {sub_chunk_cnt} sub chunks")
                 return []
             
             # normalize scores using min-max scaling
@@ -78,6 +138,7 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             return retrieved_chunks
         except Exception as e:
             msg.warn(f"Error occurred during retrieval using {self.__class__.__name__}: {e}")
+            return []
         
 
     def _arange_filter(self, filter: Filter) -> dict:
@@ -117,11 +178,11 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
         doc_meta = metadata.get("doc_meta", {})
         
         chunk_meta = metadata.get("chunk_meta", {})
-        doc_name = doc_meta.get("doc_id", "").split("/")[-1]
+        doc_name = util.MetadataSearch.search_doc_id(metadata).split("/")[-1]
         return Chunk(
             text=chunk_raw.page_content,
-            chunk_id=metadata.get("chunk_id"),
-            doc_id=metadata.get("doc_id"),
+            chunk_id=util.MetadataSearch.search_chunk_id(metadata),
+            doc_id=util.MetadataSearch.search_doc_id(metadata),
             doc_meta=util.remove_falsy({
                 "doc_name": doc_name,
                 "category": doc_meta.get("Attributes", {}).get("_category"),

@@ -2,7 +2,7 @@
 
 # Configuration Guide
 
-```
+```python
 # rag.api.py
 _config = {
     "global": {

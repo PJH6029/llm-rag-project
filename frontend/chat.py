@@ -1,5 +1,6 @@
 import streamlit as st
-import os, logging
+from wasabi import msg
+import time
 
 from frontend.util import *
 from rag.api import api as rag_api
@@ -11,10 +12,34 @@ def run():
     if user_input := st.chat_input("Enter a message..."):
         with st.chat_message("user"):
             st.markdown(user_input)
-        
+            
         with st.chat_message("assistant"):
+            
+            rag_generator = rag_api.query_stream(query=user_input, history=st.session_state.translated_messages[:])
+            
+            with st.status("Transforming query...") as status:
+                start = time.time()
+                transformed_queries = next(rag_generator).get("transformation")
+                if transformed_queries:
+                    write_queries(transformed_queries)
+                else:
+                    msg.warn("No transformation found. Check the query.")
+                end = time.time()
+                status.update(label=f"Transformed into {len(transformed_queries)} queries in {end-start:.2f} seconds.")
+            
+            with st.status("Retrieving data...") as status:
+                start = time.time()
+                chunks = next(rag_generator).get("retrieval")
+                if chunks:
+                    write_chunks(chunks)
+                else:
+                    msg.warn("No data found. Check the retrieval result.")
+                end = time.time()
+                status.update(label=f"{len(chunks)} chunks retrieved in {end-start:.2f} seconds.")
+            
+        
             response = st.write_stream(
-                (r["generation"] for r in rag_api.query_stream(query=user_input, history=st.session_state.translated_messages[:]))
+                (response.get("generation") for response in rag_generator)
             )
         
         with st.sidebar:
@@ -47,7 +72,3 @@ def run():
                 "content": response
             }
         )
-
-        # TODO visualize pipline
-    # os.write(1, b"Hi there\n")
-    logging.info("Hi there")

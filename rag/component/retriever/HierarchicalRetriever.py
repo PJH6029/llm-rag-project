@@ -12,6 +12,7 @@ class HierarchicalRetriever(BaseRAGRetriever):
     Args:
         retriever (BaseRAGRetriever): The retriever to use.
     """
+    BASE_RATIO = 0.6
     
     @classmethod
     def from_retriever(cls, retriever: BaseRAGRetriever) -> "HierarchicalRetriever":
@@ -25,14 +26,13 @@ class HierarchicalRetriever(BaseRAGRetriever):
         super().__init__()
         self.retriever = retriever
         self.top_k = self.retriever.top_k
-        self.base_ratio = 0.5
         
     def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
         # base context retrieval
         base_chunks = self.retriever.retrieve(
             queries, filter=FilterUtil.from_dict({"equals": {"key": "category", "value": "base"}})
         )
-        managed_base_chunks = base_chunks[:int(self.top_k * self.base_ratio)]
+        managed_base_chunks = base_chunks[:int(self.top_k * self.BASE_RATIO)]
         
         # additional context retrieval
         base_doc_ids = list(set([c.doc_id for c in managed_base_chunks]))

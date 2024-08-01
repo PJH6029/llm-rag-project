@@ -17,6 +17,16 @@ def display_chat_history(session_state):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
+def write_queries(queries: list[str]):
+    for i, query in enumerate(queries):
+        st.markdown(f"- query {i+1}:")
+        st.markdown(f"```\n{query}\n```")
+
+def write_chunks(chunks: list[Chunk]):
+    for i, chunk in enumerate(chunks):
+        st.markdown(f"- chunk {i+1}:")
+        st.markdown(f"```\n{chunk.text[:70]}...\n```")
+
 # TODO route to different writer based on the config(context-hierarchy)
 def write_source_docs(chunks: list[Chunk]):
     combined_chunks = combine_chunks(chunks, attach_url=True)
