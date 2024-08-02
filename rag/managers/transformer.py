@@ -85,21 +85,21 @@ class TransformerManager(BasePipelineManager):
         chain = prompt.hyde_prompt | transformer | StrOutputParser()
         return chain.invoke({"query": sentence, "history": history})
     
-    def transform(self, sentence: str, history: list[ChatLog]=None) -> list[str]:
+    def transform(self, sentence: str, history: list[ChatLog]=None) -> TransformationResult:
         if self.transformer_name is None:
             msg.warn("Transformer not set. Skipping transformation.")
             return [sentence]
 
         history = history or []
-        sentences = []
+        sentences: TransformationResult = {}
         
         chains = {}
         
         if self.enable.get("translation", False):
             sentence = self.translate(sentence)
-            sentences.append(sentence)
+            sentences["translation"] = sentence
         else:
-            sentences.append(sentence)
+            sentences["translation"] = sentence
         
         for key in ["rewriting", "expansion", "hyde"]:
             if not self.enable.get(key, False):
@@ -115,12 +115,9 @@ class TransformerManager(BasePipelineManager):
         parallel_chain = RunnableParallel(**chains)
         transformed_sentences = parallel_chain.invoke({"query": sentence, "history": history})
         for key, _sentence in transformed_sentences.items():
-            if isinstance(_sentence, list):
-                sentences.extend(_sentence)
-            else:
-                sentences.append(_sentence)
+            sentences[key] = _sentence
 
-        return list(dict.fromkeys(sentences)) # remove duplicates, preserving order
+        return sentences
 
     def build_chain(self, key: str, **model_kwargs: dict) -> Optional[Runnable]:
         prompts = {

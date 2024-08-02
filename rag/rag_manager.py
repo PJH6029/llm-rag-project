@@ -37,7 +37,7 @@ class RAGManager:
             manager.set_config(util.merge_configs(config.get(section, {}), self.global_config))
         msg.good("RAGManager successfully configured")
         
-    def transform_query(self, query: str, history: list[ChatLog]) -> list[str]:
+    def transform_query(self, query: str, history: list[ChatLog]) -> TransformationResult:
         msg.info(f"Transforming query starting with: '{query}' and {len(history)} history...")
         start = time.time()
         
@@ -47,7 +47,7 @@ class RAGManager:
         msg.good(f"Query transformed in {end-start:.2f}s, resulting in {len(queries)} queries")
         return queries
 
-    def retrieve(self, queries: list[str]) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult) -> list[Chunk]:
         msg.info(f"Retrieving with: {len(queries)} queries...")
         msg.info(f"Queries: {queries}")
         start = time.time()
@@ -112,11 +112,11 @@ class RAGManager:
         end = time.time()
         msg.good(f"Fact verification completed in {end-start:.2f}s")
         
-    def ingest(self, data_url: str, batch_size: int = 20) -> int:
-        msg.info(f"Ingesting data from {data_url}")
+    def ingest(self, file_path: str, batch_size: int = 20) -> int:
+        msg.info(f"Ingesting data from {file_path}")
         start = time.time()
                 
-        chunks_iter = loader.lazy_load_from_s3(data_url)
+        chunks_iter = loader.lazy_load(file_path)
         
         msg.good(f"Loaded documents")
 
@@ -152,11 +152,11 @@ class RAGManager:
         msg.good(f"{chunks_cnt} chunks ingested in {end-start:.2f}s")
         return chunks_cnt
 
-    def upload_data(self, file_path: str, object_location: str) -> bool:
+    def upload_data(self, file_path: str, object_location: str, metadata: Optional[dict] = None) -> bool:
         msg.info(f"Uploading data from {file_path} to {object_location}")
         start = time.time()
         
-        success = util.upload_to_s3_with_metadata(file_path, object_location=object_location)
+        success = util.upload_to_s3_with_metadata(file_path, object_location=object_location, metadata=metadata)
         
         end = time.time()
         msg.good(f"Data uploaded in {end-start:.2f}s")

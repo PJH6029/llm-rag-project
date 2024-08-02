@@ -3,7 +3,7 @@ from wasabi import msg
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from rag.type import Chunk, CombinedChunks
+from rag.type import Chunk, CombinedChunks, TransformationResult
 from rag.util import combine_chunks
 
 def session_init(session_state):
@@ -17,18 +17,29 @@ def display_chat_history(session_state):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-def write_queries(queries: list[str]):
-    for i, query in enumerate(queries):
+def write_queries(queries: TransformationResult):
+    for i, k in enumerate(queries):
         st.markdown(f"- query {i+1}:")
-        st.markdown(f"```\n{query}\n```")
+        st.markdown(f"```\n{queries[k]}\n```")
 
 def write_chunks(chunks: list[Chunk]):
     for i, chunk in enumerate(chunks):
         st.markdown(f"- chunk {i+1}:")
         st.markdown(f"```\n{chunk.text[:70]}...\n```")
 
-# TODO route to different writer based on the config(context-hierarchy)
+def _write_source_docs_without_hierarchy(chunks: list[Chunk]):
+    combined_chunks = combine_chunks(chunks, attach_url=True)
+    
+    st.divider()
+    st.markdown(f"# Total {len(chunks)} chunks")
+    write_combined_chunks(combined_chunks)
+
 def write_source_docs(chunks: list[Chunk]):
+    if not all([chunk.doc_meta.get("category") for chunk in chunks]):
+        msg.warn("Some chunks do not have category information, cannot display hierarchy")
+        _write_source_docs_without_hierarchy(chunks)
+        return
+    
     combined_chunks = combine_chunks(chunks, attach_url=True)
     
     combined_base_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("category") == "base"]

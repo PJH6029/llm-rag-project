@@ -6,6 +6,7 @@ import itertools
 from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import Runnable, RunnableLambda, RunnableParallel, RunnablePassthrough
 
 from rag.component.ingestor.base import BaseRAGIngestor
 from rag.component.ingestor.PineconeVectorstoreIngestor import PineconeVectorstoreIngestor
@@ -19,13 +20,25 @@ class ChunkGenerator:
         self.parent_id_key = "parent_id"
         
     def generate(self, chunks: list[Chunk]) -> list[Chunk]:
-        _chunks = []
-        _chunks = self._split(chunks)
-        _chunks += self._summarize(chunks)
-        _chunks += self._hypothetical_query(chunks)
-        return _chunks
+        parallel_chain = RunnableParallel(
+            split=RunnableLambda(self._split_runnable),
+            summarize=RunnableLambda(self._summarize_runnable),
+            hypothetical_query=RunnableLambda(self._hypothetical_query_runnable),
+        )
+        
+        result = parallel_chain.invoke({"chunks": chunks})
+        return list(itertools.chain(*result.values()))
 
-    def _split(self, chunks: Iterable[Chunk]) -> list[Chunk]:
+    def _split_runnable(self, _dict):
+        return self._split(_dict["chunks"])
+    
+    def _summarize_runnable(self, _dict):
+        return self._summarize(_dict["chunks"])
+
+    def _hypothetical_query_runnable(self, _dict):
+        return self._hypothetical_query(_dict["chunks"])
+
+    def _split(self, chunks: list[Chunk]) -> list[Chunk]:
         msg.info(f"Splitting {len(chunks)} chunks")
         start = time.time()
         # TODO temporal sub-chunking
@@ -43,13 +56,13 @@ class ChunkGenerator:
         msg.good(f"Splitting completed in {end - start:.2f} seconds, {len(splitted_chunks)} chunks generated")
         return splitted_chunks
     
-    def _summarize(self, chunks: Iterable[Chunk]) -> list[Chunk]:
+    def _summarize(self, chunks: list[Chunk]) -> list[Chunk]:
         msg.info(f"Summarizing {len(chunks)} chunks")
         start = time.time()
         
         chunks = list(chunks)
         
-        chain = summarize_prmopt | llm.get_model(self.llm_model_name) | StrOutputParser()
+        chain = summarize_prompt | llm.get_model(self.llm_model_name) | StrOutputParser()
         summaries = chain.batch([{"text": chunk.text, "doc_meta": chunk.doc_meta, "chunk_meta": chunk.chunk_meta} for chunk in chunks])
         new_chunks = []
         for chunk, summary in zip(chunks, summaries):
@@ -68,7 +81,7 @@ class ChunkGenerator:
         msg.good(f"Summarizing completed in {end - start:.2f} seconds, {len(new_chunks)} chunks generated")
         return new_chunks
 
-    def _hypothetical_query(self, chunks: Iterable[Chunk]) -> list[Chunk]:
+    def _hypothetical_query(self, chunks: list[Chunk]) -> list[Chunk]:
         # reverse hyde
         msg.info(f"Generating hypothetical queries for {len(chunks)} chunks")
         start = time.time()

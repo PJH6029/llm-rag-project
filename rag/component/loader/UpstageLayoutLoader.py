@@ -1,4 +1,4 @@
-from typing import Iterator, Deque
+from typing import Iterator, Deque, Literal
 from markdownify import markdownify as md
 from wasabi import msg
 import os
@@ -22,8 +22,13 @@ class UpstageLayoutLoader(BaseLoader):
         to_markdown: bool = False,
         cache_to_local: bool = False,
         backup_dir: str = "./layout_backup",
+        source_type: Literal["path", "name"] = "path",
     ) -> None:
         self.file_path = file_path
+        self.file_name = os.path.basename(file_path)
+        
+        self.source = self.file_path if source_type == "path" else self.file_name
+        
         # to implement element overlap, split by element
         self.layout_loader = UpstageLayoutAnalysisLoader(
             file_path, output_type=anlaysis_output_type, split="element" if overlap_elem_size > 0 else "page", use_ocr=use_ocr
@@ -33,9 +38,9 @@ class UpstageLayoutLoader(BaseLoader):
         self.overlap_elem_size = overlap_elem_size
         self.backup_dir = backup_dir
         
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
-        if self.cache_to_local and os.path.exists(f"{self.backup_dir}/html/{file_name}"):
-            msg.warn(f"Backup directory already exists: {self.backup_dir}/<html or md>/{file_name}")
+        dir_name = os.path.splitext(os.path.basename(file_path))[0]
+        if self.cache_to_local and os.path.exists(f"{self.backup_dir}/html/{dir_name}"):
+            msg.warn(f"Backup directory already exists: {self.backup_dir}/<html or md>/{dir_name}")
     
     def _lazy_load_non_overlap(self) -> Iterator[Document]:
         for document in self.layout_loader.lazy_load():
@@ -44,20 +49,20 @@ class UpstageLayoutLoader(BaseLoader):
     
     def _process(self, document: Document) -> Document:
         file_name_with_ext = os.path.basename(self.file_path)
-        file_name = os.path.splitext(file_name_with_ext)[0]
+        file_name_without_ext = os.path.splitext(file_name_with_ext)[0]
         
         if self.cache_to_local:
-            msg.info(f"Saving HTML into local: {file_name}_{document.metadata.get('page')}.html")
-            util.save_to_local(document, f"{self.backup_dir}/html/{file_name}/{file_name}_{document.metadata.get('page')}.html")
+            msg.info(f"Saving HTML into local: {file_name_without_ext}_{document.metadata.get('page')}.html")
+            util.save_to_local(document, f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html")
         
         if self.to_markdown:
             document.page_content = md(document.page_content)
             
             if self.cache_to_local:
-                msg.info(f"Saving Markdown into local: {file_name}_{document.metadata.get('page')}.md")
-                util.save_to_local(document, f"{self.backup_dir}/markdown/{file_name}/{file_name}_{document.metadata.get('page')}.md")
+                msg.info(f"Saving Markdown into local: {file_name_without_ext}_{document.metadata.get('page')}.md")
+                util.save_to_local(document, f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md")
         
-        document.metadata["source"] = self.file_path
+        document.metadata["source"] = self.source
         
         return document
     
@@ -93,10 +98,12 @@ class UpstageLayoutLoader(BaseLoader):
             current_page_group.append(elem_doc)
             current_page = page
         
-        # second last page
-        combined_elems = pprev_page_group[-self.overlap_elem_size:] + prev_page_group + current_page_group[:self.overlap_elem_size]
-        merged_doc = self._merge_elems(combined_elems, current_page - 1)
-        yield self._process(merged_doc)
+        if current_page > 1:
+            # second last page
+            # skipt if only one page
+            combined_elems = pprev_page_group[-self.overlap_elem_size:] + prev_page_group + current_page_group[:self.overlap_elem_size]
+            merged_doc = self._merge_elems(combined_elems, current_page - 1)
+            yield self._process(merged_doc)
         
         # last page
         combined_elems = prev_page_group[-self.overlap_elem_size:] + current_page_group
@@ -115,8 +122,8 @@ class UpstageLayoutLoader(BaseLoader):
         )
         
         # metadata except for page should be the same # TODO bounding_box, category(tagname), id are different
-        metadata = elem_docs[0].metadata
-        # metadata = {}
+        # metadata = elem_docs[0].metadata
+        metadata = {}
         metadata["page"] = page
         
         return Document(page_content=page_content, metadata=metadata)

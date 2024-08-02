@@ -6,7 +6,7 @@ from langchain_core.documents import Document
 
 from rag.component.retriever.base import BaseRAGRetriever
 from rag.type import *
-from rag.util import generate_id
+from rag import util
 
 class RetrievalConfig:
     def __init__(self, config: dict):
@@ -42,7 +42,9 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
         
         
     
-    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:
+        _queries = util.flatten_queries(queries)
+        
         if filter is not None:
             filter_dict = self._arange_filter(filter)
             self.retriever.retrieval_config = RetrievalConfig({
@@ -57,7 +59,7 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
                     "numberOfResults": self.top_k,
                 }
             })
-        retrieved_chunks_raw = self.retriever.batch(queries)
+        retrieved_chunks_raw = self.retriever.batch(_queries)
         retrieved_chunks_raw = sum(retrieved_chunks_raw, [])
         retrieved_chunks = [self.process_chunk(chunks_raw) for chunks_raw in retrieved_chunks_raw]
         retrieved_chunks = sorted(retrieved_chunks, key=lambda x: x.score, reverse=True)[:self.top_k]
@@ -90,7 +92,7 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
         if chunk_raw.metadata["source_metadata"].get("x-amz-bedrock-kb-chunk-id"):
             return chunk_raw.metadata["source_metadata"]["x-amz-bedrock-kb-chunk-id"]
         else:
-            return generate_id(chunk_raw.page_content)
+            return util.generate_id(chunk_raw.page_content)
     
     def process_chunk(self, chunk_raw: Document) -> Chunk:
         doc_meta, chunk_meta = self._process_metadata(chunk_raw)

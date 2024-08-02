@@ -5,6 +5,7 @@ import boto3
 import hashlib
 from typing import Optional, Any, Iterable, Callable
 import uuid
+import json
 
 from rag.type import *
 
@@ -74,7 +75,7 @@ def _format_combined_chunks(combined_chunks: list[CombinedChunks]) -> str:
         if combined_chunk.doc_meta.get("base_doc_id"):
             result += f"Based on: {combined_chunk.doc_meta.get('base_doc_id')}\n"
         result += f"Average Score: {combined_chunk.doc_mean_score}\n"
-        result += f"META:\n {combined_chunk.doc_meta}\n\n"
+        result += f"DOC META:\n {combined_chunk.doc_meta}\n\n"
         for chunk in combined_chunk.chunks:
             result += f"{chunk.detail(doc_meta=False)}\n\n"
     return result
@@ -205,9 +206,11 @@ def upload_to_s3(
 def upload_to_s3_with_metadata(
     file_path: str,
     object_location: str = "",
+    metadata: Optional[dict] = None,
+    metadata_ext: str = ".metadata.json",
 ) -> bool:
     file_name = os.path.basename(file_path)
-    metadata_file_name = f"{file_name}.metadata.json"
+    metadata_file_name = f"{file_name}{metadata_ext}"
 
     file_directory = os.path.dirname(file_path)
     metadata_file_path = os.path.join(file_directory, metadata_file_name)
@@ -218,8 +221,13 @@ def upload_to_s3_with_metadata(
         return False
     
     if not os.path.exists(metadata_file_path):
-        msg.fail(f"Metadata file not found: {metadata_file_path}")
-        return False
+        if metadata is None:
+            msg.fail(f"Metadata file not found: {metadata_file_path}, and metadata is not provided.")
+            return False
+        # write metadata to file
+        msg.info(f"Writing metadata to file: {metadata_file_path}")
+        with open(metadata_file_path, "w") as f:
+            f.write(json.dumps(metadata, indent=4))
     
     file_object_key = os.path.join(object_location, file_name)
     metadata_object_key = os.path.join(object_location, metadata_file_name)
@@ -325,3 +333,12 @@ class MetadataSearch:
             return source
         
         return MetadataSearch.search_doc_id(metadata)
+    
+def flatten_queries(queries: TransformationResult) -> list[str]:
+    result = []
+    for k in queries:
+        if isinstance(queries[k], list):
+            result.extend(queries[k])
+        else:
+            result.append(queries[k])
+    return result

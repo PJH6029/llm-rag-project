@@ -32,7 +32,7 @@ class EnsembleRetriever(BaseRAGRetriever):
         self.c = 60
         self.top_k = top_k
     
-    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:
         retrieved_chunks_list = [
             retriever.retrieve(queries, filter) for retriever in self.retrievers
         ]

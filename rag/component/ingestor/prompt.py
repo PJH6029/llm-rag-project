@@ -17,7 +17,7 @@ Document-level metadata:
 Chunk-level metadata:
 {chunk_meta}
 """
-summarize_prmopt = ChatPromptTemplate.from_template(summarize_prompt_template)
+summarize_prompt = ChatPromptTemplate.from_template(summarize_prompt_template)
 
 hypothetical_queries_template = """
 For the following chunk with metadata, generate {n} hypothetical queries that a user might ask.

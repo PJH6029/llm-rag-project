@@ -27,15 +27,15 @@ class HierarchicalRetriever(BaseRAGRetriever):
         self.retriever = retriever
         self.top_k = self.retriever.top_k
         
-    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:
         # base context retrieval
         base_chunks = self.retriever.retrieve(
             queries, filter=FilterUtil.from_dict({"equals": {"key": "category", "value": "base"}})
         )
         managed_base_chunks = base_chunks[:int(self.top_k * self.BASE_RATIO)]
         
-        # additional context retrieval
-        base_doc_ids = list(set([c.doc_id for c in managed_base_chunks]))
+        # additional context retrieval 
+        base_doc_ids = list(set([c.doc_id for c in managed_base_chunks])) + ["*"] # include additional docs not linked to any base doc
         additional_chunks = self.retriever.retrieve(
             queries, filter=FilterUtil.from_dict({
                 "andAll": [
@@ -72,7 +72,7 @@ class HierarchicalRetriever(BaseRAGRetriever):
         try:
             base_chunk_ids = set([
                 chunk.doc_id for chunk in chunks if chunk.doc_meta.get("category") == "base"
-            ])
+            ] + ["*"])
             
             for chunk in chunks:
                 if chunk.doc_meta.get("category") == "additional":

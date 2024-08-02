@@ -77,8 +77,10 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
         chain = runnable_input_parser | runnable_parallel | runnable_output_parser
         return chain
     
-    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:  
+    def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:  
         try:
+            _queries = util.flatten_queries(queries)
+            
             if filter is not None:
                 filter_dict = self._arange_filter(filter)
             else:
@@ -87,7 +89,7 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             id_scores = dict()
             sub_chunk_cnt = 0
             
-            sub_chunks = self._get_retrieval_chain(len(queries)).invoke({"queries": queries, "filter": filter_dict, "top_k": int(self.top_k * self.PARENT_CHILD_FACTOR)})
+            sub_chunks = self._get_retrieval_chain(len(_queries)).invoke({"queries": _queries, "filter": filter_dict, "top_k": int(self.top_k * self.PARENT_CHILD_FACTOR)})
             sub_chunk_cnt = len(sub_chunks)
             
             for sub_chunk in sub_chunks:
@@ -95,17 +97,6 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
                     if sub_chunk.chunk_meta[self._parent_id_key] not in id_scores:
                         id_scores[sub_chunk.chunk_meta[self._parent_id_key]] = []
                     id_scores[sub_chunk.chunk_meta[self._parent_id_key]].append(sub_chunk.score)
-            
-            # deprecated. Use parallel retrieval
-            # for query in queries:
-            #     sub_chunks = self.sub_vectorstore.query(query, top_k=int(self.top_k * self.PARENT_CHILD_FACTOR), filter=filter_dict)
-            #     sub_chunk_cnt += len(sub_chunks)
-                
-            #     for sub_chunk in sub_chunks:
-            #         if self._parent_id_key in sub_chunk.chunk_meta:
-            #             if sub_chunk.chunk_meta[self._parent_id_key] not in id_scores:
-            #                 id_scores[sub_chunk.chunk_meta[self._parent_id_key]] = []
-            #             id_scores[sub_chunk.chunk_meta[self._parent_id_key]].append(sub_chunk.score)
             
             # retrieve parent chunks
             retrieved_chunks_raw = self.vectorstore.fetch_docs(list(id_scores.keys()))
@@ -117,10 +108,17 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             # TODO better normalization?
             for key in id_scores:
                 id_scores[key] = sum(id_scores[key])
-            min_score = min(id_scores.values())
-            max_score = max(id_scores.values())
-            for key in id_scores:
-                id_scores[key] = (id_scores[key] - min_score) / (max_score - min_score)
+        
+            if len(id_scores) == 1:
+                # avoid division by zero
+                for key in id_scores:
+                    id_scores[key] = 1
+            else: 
+                min_score = min(id_scores.values())
+                max_score = max(id_scores.values())
+                for key in id_scores:
+                    id_scores[key] = (id_scores[key] - min_score) / (max_score - min_score)
+
             
             # assign scores
             for retrieved_chunk_raw in retrieved_chunks_raw:
@@ -184,12 +182,13 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             chunk_id=util.MetadataSearch.search_chunk_id(metadata),
             doc_id=util.MetadataSearch.search_doc_id(metadata),
             doc_meta=util.remove_falsy({
+                "doc_id": util.MetadataSearch.search_doc_id(metadata),
                 "doc_name": doc_name,
                 "category": doc_meta.get("Attributes", {}).get("_category"),
                 "base_doc_id": doc_meta.get("Attributes", {}).get("base-doc-id"),
                 "version": doc_meta.get("Attributes", {}).get("version"),
             }),
-            chunk_meta={**chunk_meta, "score": metadata.get("score")},
+            chunk_meta={**chunk_meta, "score": metadata.get("score"), "chunk_id": util.MetadataSearch.search_chunk_id(metadata)},
             score=metadata.get("score"),
         )
         

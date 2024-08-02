@@ -110,7 +110,7 @@ class RetrieverManager(BasePipelineManager):
             self.selected_retriever = retriever
         
         
-    def retrieve(self, queries: list[str], filter: dict | None=None) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, filter: dict | None=None) -> list[Chunk]:
         """Retrieve chunks from selected retriever
 
         Args:

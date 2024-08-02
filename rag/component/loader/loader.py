@@ -5,9 +5,17 @@ from rag.type import *
 from rag.component.loader import PDFWithMetadataLoader, UpstageLayoutLoader
 from rag import util
 
-def lazy_load_from_s3(s3_url: str) -> Iterable[Chunk]:
+def lazy_load(file_path: str) -> Iterable[Chunk]:
+    """Load chunk from s3 or local file path
+
+    Args:
+        file_path (str): s3 url or local file path
+
+    Returns:
+        Iterable[Chunk]: chunk iterator
+    """
     chunks_iter = PDFWithMetadataLoader(
-        s3_url,
+        file_path,
         loader=UpstageLayoutLoader,
         loader_kwargs={
             "use_ocr": True,

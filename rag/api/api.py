@@ -1,4 +1,4 @@
-from typing import Generator, Any
+from typing import Generator, Any, Optional
 from wasabi import msg
 
 from langchain_community.callbacks import get_openai_callback
@@ -73,7 +73,7 @@ def query(query: str, history: list[ChatLog]=None) -> GenerationResult:
     history = history or []
     with get_openai_callback() as cb:
         queries = rag_manager.transform_query(query, history)
-        translated_query = queries[0] # first query is the translated query
+        translated_query = queries["translation"]
         chunks = rag_manager.retrieve(queries)
         
         global recent_chunks, recent_translated_query
@@ -93,7 +93,7 @@ def query_stream(query: str, history: list[ChatLog]=None) -> Generator[Generatio
         queries = rag_manager.transform_query(query, history)
         yield {"transformation": queries}
         
-        translated_query = queries[0] # first query is the translated query
+        translated_query = queries["translation"]
         chunks = rag_manager.retrieve(queries)
         yield {"retrieval": chunks}
         
@@ -112,11 +112,11 @@ def query_stream(query: str, history: list[ChatLog]=None) -> Generator[Generatio
         
         print(cb)
     
-def upload_data(file_path: str, object_location: str) -> bool:
-    return rag_manager.upload_data(file_path, object_location)
+def upload_data(file_path: str, object_location: str, metadata: Optional[dict] = None) -> bool:
+    return rag_manager.upload_data(file_path, object_location, metadata)
 
-def ingest_data(s3_url: str) -> int:
-    return rag_manager.ingest(s3_url)
+def ingest_data(file_path: str) -> int:
+    return rag_manager.ingest(file_path)
 
 async def aingest_data(s3_url: str) -> int:
     return await rag_manager.aingest(s3_url)

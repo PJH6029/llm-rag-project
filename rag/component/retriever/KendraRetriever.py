@@ -8,6 +8,7 @@ from langchain_core.documents import Document
 
 from rag.component.retriever.base import BaseRAGRetriever
 from rag.type import *
+from rag import util
 
 class KendraRetriever(BaseRAGRetriever):
     def __init__(self, top_k: int = 5, **kwargs) -> None:
@@ -37,13 +38,15 @@ class KendraRetriever(BaseRAGRetriever):
         self.kendra_index_id = os.environ["KENDRA_INDEX_ID"]
         self.region_name = os.environ["AWS_REGION"]
     
-    def retrieve(self, queries: list[str], filter: Filter | None = None) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:
+        _queries = util.flatten_queries(queries)
+        
         if filter is not None:
             filter_dict = self._arange_filter(filter)
             self.retriever.attribute_filter = filter_dict
 
         try:
-            retrieved_chunks_raw = self.retriever.batch(queries)
+            retrieved_chunks_raw = self.retriever.batch(_queries)
             retrieved_chunks_raw = sum(retrieved_chunks_raw, [])
             retrieved_chunks = [self.process_chunk(chunks_raw) for chunks_raw in retrieved_chunks_raw]
             

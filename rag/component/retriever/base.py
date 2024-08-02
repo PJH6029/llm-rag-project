@@ -15,7 +15,7 @@ class BaseRAGRetriever:
         """Set environment variables"""
         pass
     
-    def retrieve(self, queries: list[str], filter: Optional[Filter]=None) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, filter: Optional[Filter]=None) -> list[Chunk]:
         return []
     
     def _arange_filter(self, filter: Filter) -> dict:

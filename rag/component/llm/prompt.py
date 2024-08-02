@@ -21,7 +21,7 @@ rewrite_prompt_template = """
 You are an assistant for question-revision tasks.
 Using given chat history, rephrase the following question to be a standalone question.
 The standalone question must have main words of the original question.
-Write the revised question in English.
+Write the revised question in {lang}.
 
 <chat-history>
 {history}
@@ -33,13 +33,13 @@ Write the revised question in English.
 
 Revised question:
 """
-rewrite_prompt = ChatPromptTemplate.from_template(rewrite_prompt_template)
+rewrite_prompt = ChatPromptTemplate.from_template(rewrite_prompt_template).partial(lang="English")
 
 expansion_prompt_template = """
 Your task is to expand the given query, considering the chat history.
 Generate {n} queries that are related to the given query and chat history.
 
-You should provide the queries in English.
+You should provide the queries in {lang}.
 
 All the queries should be separated by a newline.
 Do not include any additional information. Only provide the queries.
@@ -54,14 +54,14 @@ Do not include any additional information. Only provide the queries.
 
 Queries:
 """
-expansion_prompt = ChatPromptTemplate.from_template(expansion_prompt_template).partial(n=3)
+expansion_prompt = ChatPromptTemplate.from_template(expansion_prompt_template).partial(n=3, lang="English")
 
 # restrice the number of sentences to 3, to improve response latency
 hyde_prompt_template = """
 You are an assistant for question-answering tasks.
 Please write a passage to answer the question, considering the given chat history.
 Even though you cannot find the context in the chat history, you should generate a passage to answer the question.
-Write the answer in English.
+Write the answer in {lang}.
 
 Use up to {n} sentences to answer the question.
 
@@ -75,7 +75,7 @@ Use up to {n} sentences to answer the question.
 
 Answer:
 """
-hyde_prompt = ChatPromptTemplate.from_template(hyde_prompt_template).partial(n=3)
+hyde_prompt = ChatPromptTemplate.from_template(hyde_prompt_template).partial(n=3, lang="English")
 
 generation_with_hierarchy_prompt_template = """
 You are an assistant for question-answering tasks.
