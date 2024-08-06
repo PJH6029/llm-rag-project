@@ -3,7 +3,7 @@ from wasabi import msg
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from rag.type import Chunk, CombinedChunks, TransformationResult
+from rag.type import Chunk, CombinedChunks
 from rag.util import combine_chunks
 
 def session_init(session_state):
@@ -17,7 +17,7 @@ def display_chat_history(session_state):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-def write_queries(queries: TransformationResult):
+def write_queries(queries: list[str]):
     for i, k in enumerate(queries):
         st.markdown(f"- query {i+1}:")
         st.markdown(f"```\n{queries[k]}\n```")

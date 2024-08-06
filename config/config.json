@@ -1,0 +1,48 @@
+{
+    "global": {
+        "lang": {
+            "user": "Korean",
+            "source": "English"
+        }
+    },
+    "chat": {
+
+    },
+    "rag": {
+        "global": {
+            "context-hierarchy": true
+        },
+        "ingestion": {
+            "ingestor": "pinecone-multivector",
+            "embeddings": "text-embedding-3-small",
+            "namespace": "parent-upstage-overlap-backup",
+            "sub-namespace": "child-upstage-overlap-backup"
+        },
+        "transformation": {
+            "model": "gpt-4o-mini",
+            "enable": {
+                "translation": true,
+                "rewriting": true,
+                "expansion": false,
+                "hyde": true
+            }
+        },
+        "retrieval": {
+            "retriever": ["pinecone-multivector"],
+            "namespace": "parent-upstage-overlap-backup",
+            "sub-namespace": "child-upstage-overlap-backup",
+            "embeddings": "text-embedding-3-small",
+            "top_k": 6,
+            "post_retrieval": {
+                "rerank": true
+            }
+        },
+        "generation": {
+            "model": "gpt-4o"
+        },
+        "fact_verification": {
+            "model": "gpt-4o-mini",
+            "enable": false
+        }
+    }
+}

@@ -81,7 +81,7 @@ Filter = Union[FilterPredicate, FilterExpression]
 TransformationResult = dict[Literal["translation", "expansion", "rewriting", "hyde"], Union[str, list[str]]]
 
 ChatLog = dict[Literal["role", "content"], str]
-GenerationResult = dict[Literal["transformation", "retrieval", "generation", "fact_verification"], Union[TransformationResult, list[Chunk], str]]
+GenerationResult = dict[Literal["transformation", "retrieval", "generation", "fact_verification"], Union[str, list[Chunk], list[str]]]
  
 AnyLanguageModel = Union[BaseLanguageModel]
 AnyEmbeddings = Union[Embeddings]

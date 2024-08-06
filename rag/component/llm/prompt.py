@@ -1,11 +1,11 @@
 from langchain_core.prompts import ChatPromptTemplate
 
 translation_prompt_template = """
-You are an assistant for Korean-English translation tasks.
+You are an assistant for {user_lang}-{source_lang} translation tasks.
 
 I will give you the sentence.
-If the sentence is already written in English, just copy the sentence.
-If not, please translate the sentence from Korean to English.
+If the sentence is already written in {source_lang}, just copy the sentence.
+If not, please translate the sentence from {user_lang} to {source_lang}.
 
 You should say only the translation of the sentence, and do not say any additional information.
 
@@ -15,7 +15,7 @@ You should say only the translation of the sentence, and do not say any addition
 
 Translation:
 """
-translation_prompt = ChatPromptTemplate.from_template(translation_prompt_template)
+translation_prompt = ChatPromptTemplate.from_template(translation_prompt_template).partial(user_lang="Korean", source_lang="English")
 
 rewrite_prompt_template = """
 You are an assistant for question-revision tasks.
@@ -99,6 +99,8 @@ You can answer in descriptive form or paraphrased form if you want, and keep the
 You should answer with the format of the example answer below.
 When you reference the documents, you should provide the exact title of the document.
 Feel free to use markdown to format your answer.
+
+Write the answer in {lang}. Keep proper nouns, requirements IDs, or any other specialized terms as they are.
 
 --------------------------------------------------
 **** Example 1 ****
@@ -227,7 +229,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 
 Answer:
 """
-generation_with_hierarchy_prompt = ChatPromptTemplate.from_template(generation_with_hierarchy_prompt_template)
+generation_with_hierarchy_prompt = ChatPromptTemplate.from_template(generation_with_hierarchy_prompt_template).partial(lang="English")
 
 generation_without_hierarchy_prompt_template = """
 You are an assistant for question-answering tasks.
@@ -239,6 +241,8 @@ You can answer in descriptive form or paraphrased form if you want, and keep the
 
 You should answer with the format of the example answer below.
 Feel free to use markdown to format your answer.
+
+Write the answer in {lang}. Keep proper nouns, requirements IDs, or any other specialized terms as they are.
 
 --------------------------------------------------
 **** Example 1 ****
@@ -360,7 +364,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 
 Answer:
 """
-generation_without_hierarchy_prompt = ChatPromptTemplate.from_template(generation_without_hierarchy_prompt_template)
+generation_without_hierarchy_prompt = ChatPromptTemplate.from_template(generation_without_hierarchy_prompt_template).partial(lang="English")
 
 verification_prompt_template = """
 Given context, verify the fact in the response. If the response is correct, say "Yes". If not, say "No".

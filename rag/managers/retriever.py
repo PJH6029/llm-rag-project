@@ -57,12 +57,6 @@ class RetrieverManager(BasePipelineManager):
 
         self.post_retrieval_config = config.get("post_retrieval", {}) # TODO
         
-        # TODO
-        # init_params = {
-        #     "top_k": self.top_k,
-        #     "embeddings": self.embeddings,
-        # }
-        # init_params = util.remove_falsy(init_params)
         self.init_retriever(config)
     
         

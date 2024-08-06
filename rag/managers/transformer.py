@@ -21,69 +21,18 @@ class TransformerManager(BasePipelineManager):
         self.transformer_name = config.get("model")
         self.enable = config.get("enable", {})
         
+        self.user_lang = config.get("lang", {}).get("user", "Korean")
+        self.source_lang = config.get("lang", {}).get("source", "English")
+        
         msg.info(f"Setting TRANSFORMER to {self.transformer_name}")
-        
-    def transform_deprecated(self, sentence: str, history: list[ChatLog]=None) -> list[str]:
-        if self.transformer_name is None:
-            msg.warn("Transformer not set. Skipping transformation.")
-            return [sentence]
-
-        history = history or []
-        sentences = []
-        
-        if self.enable.get("translation", False):
-            sentence = self.translate(sentence)
-            sentences.append(sentence)
-        else:
-            sentences.append(sentence)
-        
-        if self.enable.get("rewriting", False):
-            sentence = self.rewrite(sentence, history)
-            sentences.append(sentence)
-        if self.enable.get("expansion", False):
-            expanded_sentences = self.expand(sentence, history)
-            sentences.extend(expanded_sentences)
-        if self.enable.get("hyde", False):
-            sentence = self.hyde(sentence, history)
-            sentences.append(sentence)
-
-        return list(dict.fromkeys(sentences)) # remove duplicates, preserving order
-    
+ 
     def translate(self, sentence: str) -> str:
         transformer = llm.get_model(self.transformer_name)
         if transformer is None:
             return sentence
         
-        chain = prompt.translation_prompt | transformer | StrOutputParser()
+        chain = prompt.translation_prompt.partial(user_lang=self.user_lang, source_lang=self.source_lang) | transformer | StrOutputParser()
         return chain.invoke({"sentence": sentence})
-    
-    def rewrite(self, sentence: str, history: list[ChatLog]) -> str:
-        transformer = llm.get_model(self.transformer_name)
-        if transformer is None:
-            return sentence
-        
-        chain = prompt.rewrite_prompt | transformer | StrOutputParser()
-        return chain.invoke({"query": sentence, "history": history})
-    
-    def expand(self, sentence: str, history: list[ChatLog]) -> list[str]:
-        transformer = llm.get_model(self.transformer_name)
-        if transformer is None:
-            return [sentence]
-        
-        chain = prompt.expansion_prompt | transformer | StrOutputParser()
-        sentences = chain.invoke({"query": sentence, "history": history})
-        try:
-            return sentences.split(",")
-        except:
-            return [sentence]
-    
-    def hyde(self, sentence: str, history: list[ChatLog]) -> str:
-        transformer = llm.get_model(self.transformer_name)
-        if transformer is None:
-            return sentence
-        
-        chain = prompt.hyde_prompt | transformer | StrOutputParser()
-        return chain.invoke({"query": sentence, "history": history})
     
     def transform(self, sentence: str, history: list[ChatLog]=None) -> TransformationResult:
         if self.transformer_name is None:
@@ -95,17 +44,21 @@ class TransformerManager(BasePipelineManager):
         
         chains = {}
         
-        if self.enable.get("translation", False):
+        # if translation is disabled even though the user language is different from the source language,
+        # the entire queries will be in the user language
+        if self.user_lang != self.source_lang and self.enable.get("translation", False):
             sentence = self.translate(sentence)
             sentences["translation"] = sentence
+            query_lang = self.source_lang
         else:
             sentences["translation"] = sentence
+            query_lang = self.user_lang
         
         for key in ["rewriting", "expansion", "hyde"]:
             if not self.enable.get(key, False):
                 continue
             
-            chain = self.build_chain(key, temperature=0.9)
+            chain = self.build_chain(key, lang=query_lang, temperature=0.9)
             
             if chain is not None:
                 if key == "expansion":
@@ -119,11 +72,11 @@ class TransformerManager(BasePipelineManager):
 
         return sentences
 
-    def build_chain(self, key: str, **model_kwargs: dict) -> Optional[Runnable]:
+    def build_chain(self, key: str, *, lang: str="English", **model_kwargs: dict) -> Optional[Runnable]:
         prompts = {
-            "rewriting": prompt.rewrite_prompt,
-            "expansion": prompt.expansion_prompt,
-            "hyde": prompt.hyde_prompt
+            "rewriting": prompt.rewrite_prompt.partial(lang=lang),
+            "expansion": prompt.expansion_prompt.partial(lang=lang),
+            "hyde": prompt.hyde_prompt.partial(lang=lang),
         }
         transformer = llm.get_model(self.transformer_name, **model_kwargs)
         if transformer is None:

@@ -11,21 +11,24 @@ from rag.type import *
 
 def load_secrets():
     msg.info("Loading secrets...")
-    keys = {
-        "UPSTAGE_API_KEY",
-        "OPENAI_API_KEY",
-        "AWS_REGION",
-        "KENDRA_INDEX_ID",
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "S3_BUCKET_NAME",
-    }
-    for key in keys:
+    for key in st.secrets.keys():
         try:
             os.environ[key] = st.secrets[key]
         except KeyError:
             msg.warn(f"Secret '{key}' not found. You may not be able to access some features.")
-        
+
+def load_config(config_path = "config/config.json") -> dict:
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        rag_config = config.get("rag", {})
+        global_config = config.get("global", {})
+        rag_config.get("global", {}).update(global_config)
+        return rag_config # TODO language
+    except Exception as e:
+        msg.fail(f"Failed to load config: {e}")
+        return {}
+
 def merge_configs(*configs: dict) -> dict:
     merged_config = {}
     for config in configs:
@@ -206,11 +209,9 @@ def upload_to_s3(
 def upload_to_s3_with_metadata(
     file_path: str,
     object_location: str = "",
-    metadata: Optional[dict] = None,
-    metadata_ext: str = ".metadata.json",
 ) -> bool:
     file_name = os.path.basename(file_path)
-    metadata_file_name = f"{file_name}{metadata_ext}"
+    metadata_file_name = f"{file_name}.metadata.json"
 
     file_directory = os.path.dirname(file_path)
     metadata_file_path = os.path.join(file_directory, metadata_file_name)
@@ -221,13 +222,8 @@ def upload_to_s3_with_metadata(
         return False
     
     if not os.path.exists(metadata_file_path):
-        if metadata is None:
-            msg.fail(f"Metadata file not found: {metadata_file_path}, and metadata is not provided.")
-            return False
-        # write metadata to file
-        msg.info(f"Writing metadata to file: {metadata_file_path}")
-        with open(metadata_file_path, "w") as f:
-            f.write(json.dumps(metadata, indent=4))
+        msg.fail(f"Metadata file not found: {metadata_file_path}")
+        return False
     
     file_object_key = os.path.join(object_location, file_name)
     metadata_object_key = os.path.join(object_location, metadata_file_name)
