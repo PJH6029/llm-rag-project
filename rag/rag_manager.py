@@ -140,7 +140,7 @@ class RAGManager:
             
             yield from self.managers.generation.generate_stream(query, history_str, context)
     
-    def verify_fact(self, response: str, chunks: list[Chunk]) -> str:
+    def verify_fact(self, response: str, chunks: list[Chunk]) -> VerificationResult:
         with time_logger(
             lambda: f"Verifying fact...",
             lambda: f"Fact verification completed"
@@ -150,13 +150,13 @@ class RAGManager:
             return verification_response
 
     
-    def verify_fact_stream(self, response: str, chunks: list[Chunk]) -> Generator[str, None, None]:
-        with time_logger(
-            lambda: f"Verifying fact...",
-            lambda: f"Fact verification completed"
-        ):
-            context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
-            yield from self.managers.fact_verification.verify_stream(response, context)
+    # def verify_fact_stream(self, response: str, chunks: list[Chunk]) -> Generator[str, None, None]:
+    #     with time_logger(
+    #         lambda: f"Verifying fact...",
+    #         lambda: f"Fact verification completed"
+    #     ):
+    #         context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
+    #         yield from self.managers.fact_verification.verify_stream(response, context)
     
     def _ingest_with_loader(self, loader: Iterable[Chunk], batch_size: int = 20) -> int:
         with time_logger(

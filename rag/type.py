@@ -1,9 +1,10 @@
-from typing import Literal, Union, get_args
+from typing import Literal, Union, get_args, TypedDict
 from pydantic import BaseModel
 
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document
+from langchain_core.pydantic_v1 import Field
 
 class Chunk(BaseModel):
     text: str
@@ -77,11 +78,23 @@ class FilterExpression(BaseModel):
         return {self.op: [predicate.dict() for predicate in self.predicates]}
 
 Filter = Union[FilterPredicate, FilterExpression]
-
-TransformationResult = dict[Literal["translation", "expansion", "rewriting", "hyde"], Union[str, list[str]]]
+class TransformationResult(TypedDict):
+    translation: str
+    expansion: list[str]
+    rewriting: str
+    hyde: str
 
 ChatLog = dict[Literal["role", "content"], str]
-GenerationResult = dict[Literal["transformation", "retrieval", "generation", "fact_verification"], Union[str, list[Chunk], list[str]]]
- 
+
+class VerificationResult(BaseModel):
+    verification: bool = Field(description="The verification result")
+    reasoning: str = Field(description="The reasoning for the verification result")
+
+class GenerationResult(TypedDict):
+    transformation: TransformationResult
+    retrieval: list[Chunk]
+    generation: str
+    fact_verification: VerificationResult
+
 AnyLanguageModel = Union[BaseLanguageModel]
 AnyEmbeddings = Union[Embeddings]

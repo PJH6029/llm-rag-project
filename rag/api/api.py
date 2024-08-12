@@ -91,7 +91,7 @@ def query(query: str, history: list[ChatLog]=None) -> GenerationResult:
         verification_response = rag_manager.verify_fact(generation_response, chunks)
         
         print(cb)
-    return {"transformation": queries, "retrieval": chunks, "generation": generation_response, "fact_verification": verification_response}
+    return {"transformation": queries, "retrieval": chunks, "generation": generation_response, "fact_verification": verification_response.model_dump()}
     
 
 def query_stream(query: str, history: list[ChatLog]=None) -> Generator[GenerationResult, None, None]:
@@ -114,8 +114,7 @@ def query_stream(query: str, history: list[ChatLog]=None) -> Generator[Generatio
             generation_response += response
         
         # TODO visualize the result in frontend
-        for response in rag_manager.verify_fact_stream(generation_response, chunks):
-            yield {"fact_verification": response}
+        yield {"fact_verification": rag_manager.verify_fact(generation_response, chunks)}
         
         print(cb)
     

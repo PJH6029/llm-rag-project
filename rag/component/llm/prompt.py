@@ -367,10 +367,21 @@ Answer:
 generation_without_hierarchy_prompt = ChatPromptTemplate.from_template(generation_without_hierarchy_prompt_template).partial(lang="English")
 
 verification_prompt_template = """
-Given context, verify the fact in the response. If the response is correct, say "Yes". If not, say "No".
+Given context, verify the fact in the response.
+You should also provide the reasoning for the verification.
+Write the response in json format, with the following keys: "verification", "reasoning".
+"verification" should be a boolean value that indicates whether the response is correct or not.
+"reasoning" should be a string that explains the reason for the verification.
+
+Write the reasoning in {lang}. Keep proper nouns, requirements IDs, or any other specialized terms as they are.
+
 Context: {context}
 Answer: {response}
 
 Verification:
+{{
+    "verification": "<true/false>",
+    "reasoning": "<reasoning>"
+}}
 """
-verification_prompt = ChatPromptTemplate.from_template(verification_prompt_template)
+verification_prompt = ChatPromptTemplate.from_template(verification_prompt_template).partial(lang="English")

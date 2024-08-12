@@ -12,7 +12,7 @@ class HierarchicalRetriever(BaseRAGRetriever):
     Args:
         retriever (BaseRAGRetriever): The retriever to use.
     """
-    BASE_RATIO = 0.6
+    BASE_RATIO = 0.7
     
     @classmethod
     def from_retriever(cls, retriever: BaseRAGRetriever) -> "HierarchicalRetriever":
