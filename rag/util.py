@@ -1,13 +1,19 @@
-import streamlit as st
+import contextlib
 import os
 from wasabi import msg
 import boto3
 import hashlib
-from typing import Optional, Any, Iterable, Callable
+from typing import Optional, Any, Iterable, Callable, Generator, Type
 import uuid
 import json
+import time
+import re
+
+import streamlit as st
+from markdownify import markdownify as md
 
 from rag.type import *
+from rag.config import *
 
 def load_secrets():
     msg.info("Loading secrets...")
@@ -29,17 +35,49 @@ def load_config(config_path = "config/config.json") -> dict:
         msg.fail(f"Failed to load config: {e}")
         return {}
 
-def merge_configs(*configs: dict) -> dict:
-    merged_config = {}
-    for config in configs:
-        merged_config = {**merged_config, **config}
-    return merged_config
+# def merge_configs(*configs: dict) -> dict:
+#     merged_config = {}
+#     for config in configs:
+#         merged_config = {**merged_config, **config}
+#     return merged_config
+
+def attach_global_config(config: RAGPipelineConfig, global_config: GlobalConfig) -> RAGPipelineConfig:
+    config.global_ = global_config
+    return config
+
+@contextlib.contextmanager
+def time_logger(
+    start_msg_cb: Callable[..., str],
+    end_msg_cb: Callable[..., str],
+) -> Generator[None, None, None]:
+    start = time.time()
+    msg.info(start_msg_cb())
+    yield
+    end = time.time()
+    msg.good(f"{end_msg_cb()} ({end-start:.2f}s)")
 
 def remove_none(config: dict) -> dict:
     return {k: v for k, v in config.items() if v is not None}
 
-def remove_falsy(config: dict) -> dict:
-    return {k: v for k, v in config.items() if v}
+def remove_falsy(
+    config: dict,
+    falsy_values: dict[Type, list[Any]] = {
+        int: [-1],
+    }
+) -> dict:
+    result = {}
+    for k, v in config.items():
+        if v is None:
+            continue
+        if type(v) in falsy_values:
+            # look up falsy values
+            if v not in falsy_values[type(v)]:
+                result[k] = v
+        else:
+            # default falsy values
+            if bool(v):
+                result[k] = v    
+    return result
 
 def get_presigned_url(s3_uri: str) -> str:
     s3 = boto3.client("s3")
@@ -98,8 +136,8 @@ def format_chunks_hierarchy_context(chunks: list[Chunk]) -> str:
         "additional": "",
     }
     
-    base_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("category") == "base"]
-    additional_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("category") == "additional"]
+    base_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("doc_type") == "base"]
+    additional_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("doc_type") == "additional"]
     
     # base
     context["base"] = _format_combined_chunks(base_chunks)
@@ -131,8 +169,7 @@ def generate_id(input_string: str) -> str:
     hex_dig = hash_object.hexdigest()
     return hex_dig
 
-# TODO separating with underscores might occur bugs if the key end with trailing underscores
-def flatten_dict(d: dict, ignore_dup: bool=False, parent_key: str = "", sep: str = "___") -> dict[str, Any]:
+def flatten_dict(d: dict, ignore_dup: bool=False, parent_key: str = "", sep: str = "/") -> dict[str, Any]:
     items = []
     for k, v in d.items():
         new_key = parent_key + sep + k if parent_key else k
@@ -142,7 +179,7 @@ def flatten_dict(d: dict, ignore_dup: bool=False, parent_key: str = "", sep: str
             items.append((new_key, v))
     return dict(items)
 
-def deflatten_dict(d: dict[str, Any], sep: str = "___") -> dict:
+def deflatten_dict(d: dict[str, Any], sep: str = "/") -> dict:
     result = {}
     for key, value in d.items():
         parts = key.split(sep)
@@ -152,27 +189,59 @@ def deflatten_dict(d: dict[str, Any], sep: str = "___") -> dict:
         d_ptr[parts[-1]] = value
     return result
 
-def doc_to_chunk(document: Document) -> Chunk:
+def _default_metadata_handler(metadata: dict) -> tuple[dict, dict]:
+    doc_id = MetadataSearch.search_doc_id(metadata)
+    doc_source = MetadataSearch.search_source(metadata)
+    if doc_id is None and doc_source is None:
+        raise ValueError("doc_id & doc_source not found in metadata")
+
+    # if one of them is None, use the other
+    if doc_id is None:
+        doc_id = doc_source
+    elif doc_source is None:
+        doc_source = doc_id
+    
+    page = metadata.pop("page", -1)
+    doc_meta = {
+        **metadata,
+        "doc_id": doc_id,
+        "source": doc_source,
+    }
+    chunk_meta = {
+        "page": page,
+    }
+    return doc_meta, chunk_meta
+
+def doc_to_chunk(
+    document: Document,
+    *,
+    metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None,
+) -> Chunk:
+    if metadata_handler is None:
+        final_metadata_handler = _default_metadata_handler
+    else:
+        # chaining metadata handler
+        def final_metadata_handler(metadata: dict) -> tuple[dict, dict]:
+            doc_meta, chunk_meta = metadata_handler(metadata)
+            default_doc_meta, default_chunk_meta = _default_metadata_handler(metadata)
+            doc_meta = {**default_doc_meta, **doc_meta}
+            chunk_meta = {**default_chunk_meta, **chunk_meta}
+            return doc_meta, chunk_meta
     try:
-        chunk_id = str(uuid.uuid4())
-        page = document.metadata.pop("page", -1)
-        
-        chunk = Chunk(
-            text=document.page_content,
-            doc_id=MetadataSearch.search_doc_id(document.metadata),
-            chunk_id=chunk_id,
-            doc_meta={
-                **document.metadata,
-                "source": MetadataSearch.search_source(document.metadata),
-            },
-            chunk_meta={
-                "chunk_id": chunk_id,
-                "page": page,
-            }
-        )
-        return chunk
-    except KeyError as e:
-        raise ValueError(f"doc_id not found in document metadata: {e}")
+        doc_meta, chunk_meta = final_metadata_handler(document.metadata)
+    except Exception as e:
+        msg.warn(f"Failed to handle metadata: {e}. Using default metadata handler.")
+        doc_meta, chunk_meta = _default_metadata_handler(document.metadata)
+
+    chunk_id = str(uuid.uuid4())
+    chunk = Chunk(
+        text=document.page_content,
+        doc_id=doc_meta["doc_id"],
+        chunk_id=chunk_id,
+        doc_meta=remove_falsy(doc_meta),
+        chunk_meta=remove_falsy(chunk_meta)
+    )
+    return chunk
 
 def is_in_nested_keys(d: dict, key: str) -> bool:
     if key in d:
@@ -182,6 +251,17 @@ def is_in_nested_keys(d: dict, key: str) -> bool:
             if is_in_nested_keys(v, key):
                 return True
     return False
+
+def validate_metadata(metadata: dict) -> bool:
+    # forbidden characters for metadata keys
+    forbidden_chars = set([".", "#", "[", "]", "/"])
+    for key, value in metadata.items():
+        if set(key) & forbidden_chars:
+            return False
+        if isinstance(value, dict):
+            if not validate_metadata(value):
+                return False
+    return True
 
 def get_s3_url_from_object_key(object_key: str) -> str:
     return f"s3://{os.environ['S3_BUCKET_NAME']}/{object_key}"
@@ -211,20 +291,33 @@ def upload_to_s3(
 def upload_to_s3_with_metadata(
     file_path: str,
     object_location: str = "",
+    metadata: Optional[dict] = None,
+    metadata_ext: str = ".metadata.json",
 ) -> bool:
     file_name = os.path.basename(file_path)
-    metadata_file_name = f"{file_name}.metadata.json"
+    metadata_file_name = f"{file_name}{metadata_ext}"
 
     file_directory = os.path.dirname(file_path)
     metadata_file_path = os.path.join(file_directory, metadata_file_name)
     
-    # if file or metadata does not exist, return
     if not os.path.exists(file_path):
         msg.fail(f"File not found: {file_path}")
         return False
     
     if not os.path.exists(metadata_file_path):
-        msg.fail(f"Metadata file not found: {metadata_file_path}")
+        if metadata is None:
+            msg.warn(f"Metadata file not found: {metadata_file_path}, and metadata is not provided. Uploading file only.")
+        else:
+            # write metadata to file
+            msg.info(f"Writing metadata to file: {metadata_file_path}")
+            with open(metadata_file_path, "w") as f:
+                f.write(json.dumps(metadata, indent=4))
+    else:
+        with open(metadata_file_path, "r") as f:
+            metadata = json.load(f)
+    
+    if not validate_metadata(metadata):
+        msg.fail(f"Invalid metadata: {metadata}")
         return False
     
     file_object_key = os.path.join(object_location, file_name)
@@ -261,17 +354,16 @@ def split_s3_url(s3_url: str) -> tuple[str, str]:
         msg.fail(f"Failed to split S3 URL: {e}")
         return None, None
 
-def save_to_local(document: Document, file_path: str) -> bool:
+def save_to_local(content: Any, file_path: str) -> bool:
     if not os.path.exists(os.path.dirname(file_path)):
         os.makedirs(os.path.dirname(file_path))
     
     try:
         with open(file_path, "w") as f:
-            f.write(document.page_content)
+            f.write(content)
     except Exception as e:
-        msg.fail(f"Failed to save document to local: {e}")
+        msg.fail(f"Failed to save content to local: {e}")
         return False
-    # msg.good(f"Document saved to local: {file_path}")
     return True
 
 def execute_as_batch(
@@ -340,3 +432,8 @@ def flatten_queries(queries: TransformationResult) -> list[str]:
         else:
             result.append(queries[k])
     return result
+
+def markdownify(text: str, **markdownify_options) -> str:
+    text = md(text, **markdownify_options).replace("\xa0", " ").strip()
+    cleaned_text = re.sub(r"\n\s*\n", "\n\n", text)
+    return cleaned_text

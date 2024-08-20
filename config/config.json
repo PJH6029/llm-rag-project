@@ -10,13 +10,13 @@
     },
     "rag": {
         "global": {
-            "context-hierarchy": true
+            "context_hierarchy": true
         },
         "ingestion": {
             "ingestor": "pinecone-multivector",
             "embeddings": "text-embedding-3-small",
-            "namespace": "parent-upstage-overlap-backup",
-            "sub-namespace": "child-upstage-overlap-backup"
+            "namespace": "parent-final",
+            "sub_namespace": "child-final"
         },
         "transformation": {
             "model": "gpt-4o-mini",
@@ -29,8 +29,8 @@
         },
         "retrieval": {
             "retriever": ["pinecone-multivector"],
-            "namespace": "parent-upstage-overlap-backup",
-            "sub-namespace": "child-upstage-overlap-backup",
+            "namespace": "parent-final",
+            "sub_namespace": "child-final",
             "embeddings": "text-embedding-3-small",
             "top_k": 6
         },

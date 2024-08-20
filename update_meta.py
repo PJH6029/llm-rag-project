@@ -4,7 +4,7 @@ import os
 from rag.component.vectorstore.PineconeVectorstore import PineconeVectorstore
 from rag.component import llm, embeddings
 
-META_KEY_PREFIX = "doc_meta___"
+META_KEY_PREFIX = "doc_meta/"
 
 doc_ids = [
     # "APPLE/ISO_SSD_NVME_FADU_FIRMWARE_NOMENCLATURE_1.3-DRAFT.pdf",
@@ -38,7 +38,7 @@ index = pc.Index(os.environ["PINECONE_INDEX_NAME"])
 #         for chunk_id in chunk_ids:
 #             index.update(
 #                 id=chunk_id,
-#                 set_metadata={f"{META_KEY_PREFIX}_category": "additional",f"{META_KEY_PREFIX}base-doc-id": "*"},
+#                 set_metadata={f"{META_KEY_PREFIX}doc_type": "additional",f"{META_KEY_PREFIX}base_doc_id": "*"},
 #                 namespace=namespace,
 #             )
 #         print(f"Updated {len(chunk_ids)} chunks in {namespace}")

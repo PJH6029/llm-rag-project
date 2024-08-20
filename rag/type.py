@@ -1,5 +1,5 @@
-from typing import Literal, Union, get_args, TypedDict
-from pydantic import BaseModel
+from typing import Literal, Union, get_args, TypedDict ,Any
+from pydantic import BaseModel, Field, model_validator
 
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.embeddings import Embeddings
@@ -14,7 +14,22 @@ class Chunk(BaseModel):
     chunk_meta: dict = {}
     score: float = 0.0
     source_retriever: str = ""
-    
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_meta(cls, v: dict[str, Any]) -> dict[str, Any]:
+        doc_meta = v.get("doc_meta", {})
+        chunk_meta = v.get("chunk_meta", {})
+        doc_id = v.get("doc_id")
+        chunk_id = v.get("chunk_id")
+        
+        # check doc_id
+        doc_meta["doc_id"] = doc_id
+        
+        # check chunk_id
+        chunk_meta["chunk_id"] = chunk_id
+        return v
+
     def __str__(self) -> str:
         return f"Chunk(doc_id={self.doc_id}, chunk_id={self.chunk_id}, score={self.score}, doc_meta={self.doc_meta}, chunk_meta={self.chunk_meta})"
 

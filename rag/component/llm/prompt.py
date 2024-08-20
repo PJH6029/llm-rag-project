@@ -113,7 +113,7 @@ Human: Can you describe the features of UTIL-1?
     --- Document: Datacenter NVMe SSD Specification v2.0r21.pdf ---
     Average Score: 0.99
     DOC META:
-    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf', 'doc_name': 'Datacenter NVMe SSD Specification v2.0r21.pdf', 'category': 'base', 'version': 'v2.0r21', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf'}}
+    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf', 'doc_name': 'Datacenter NVMe SSD Specification v2.0r21.pdf', 'doc_type': 'base', 'version': 'v2.0r21', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf'}}
     
     --- Chunk: dbc8ea71-dd6e-45df-a78c-0bec284d170c-9869493d-2d77-484c-82c3-c9b4befcef55 ---
     Score: 0.99
@@ -136,7 +136,7 @@ Human: Can you describe the features of UTIL-1?
     --- Document: datacenter-nvme-ssd-specification-v2-5-pdf.pdf ---
     Average Score: 0.97
     DOC META:
-    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_name': 'datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'category': 'base', 'version': 'v2.5', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
+    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_name': 'datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_type': 'base', 'version': 'v2.5', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
     
     --- Chunk: 7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b ---
     Score: 0.97
@@ -161,7 +161,7 @@ Human: Can you describe the features of UTIL-1?
     Based on: s3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf
     Average Score: 0.89
     DOC META:
-    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_name': 'Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'category': 'additional', 'version': 'v2.5-addendum-v0.20', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'base_doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
+    {{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_name': 'Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_type': 'additional', 'version': 'v2.5-addendum-v0.20', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'base_doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
     
     --- Chunk: 7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b ---
     Score: 0.89
@@ -227,7 +227,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 {query}
 </question>
 
-Answer:
+Answer (in {lang}):
 """
 generation_with_hierarchy_prompt = ChatPromptTemplate.from_template(generation_with_hierarchy_prompt_template).partial(lang="English")
 
@@ -254,7 +254,7 @@ Human: Can you describe the features of UTIL-1?
 --- Document: Datacenter NVMe SSD Specification v2.0r21.pdf ---
 Average Score: 0.99
 DOC META:
-{{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf', 'doc_name': 'Datacenter NVMe SSD Specification v2.0r21.pdf', 'category': 'base', 'version': 'v2.0r21', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf'}}
+{{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf', 'doc_name': 'Datacenter NVMe SSD Specification v2.0r21.pdf', 'doc_type': 'base', 'version': 'v2.0r21', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.0/Datacenter+NVMe+SSD+Specification+v2.0r21.pdf'}}
 
 --- Chunk: dbc8ea71-dd6e-45df-a78c-0bec284d170c-9869493d-2d77-484c-82c3-c9b4befcef55 ---
 Score: 0.99
@@ -277,7 +277,7 @@ CHUNK META:
 --- Document: datacenter-nvme-ssd-specification-v2-5-pdf.pdf ---
 Average Score: 0.97
 DOC META:
-{{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_name': 'datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'category': 'base', 'version': 'v2.5', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
+{{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_name': 'datacenter-nvme-ssd-specification-v2-5-pdf.pdf', 'doc_type': 'base', 'version': 'v2.5', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
 
 --- Chunk: 7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b ---
 Score: 0.97
@@ -300,7 +300,7 @@ CHUNK META:
 Based on: s3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf
 Average Score: 0.89
 DOC META:
-{{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_name': 'Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'category': 'additional', 'version': 'v2.5-addendum-v0.20', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'base_doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
+{{'doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_name': 'Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'doc_type': 'additional', 'version': 'v2.5-addendum-v0.20', 'uri': 'https://llm-project-demo-bucket.s3.ap-northeast-1.amazonaws.com/frequently_access_documents/OCP/2.5/Datacenter_NVMe_SSD_Specification_v2.5_Addendum_v0.20.pdf', 'base_doc_id': 's3://llm-project-demo-bucket/frequently_access_documents/OCP/2.5/datacenter-nvme-ssd-specification-v2-5-pdf.pdf'}}
 
 --- Chunk: 7b1b1b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b-7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b ---
 Score: 0.89
@@ -362,7 +362,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 {query}
 </question>
 
-Answer:
+Answer (in {lang}):
 """
 generation_without_hierarchy_prompt = ChatPromptTemplate.from_template(generation_without_hierarchy_prompt_template).partial(lang="English")
 

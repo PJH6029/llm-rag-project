@@ -70,7 +70,7 @@ class KendraRetriever(BaseRAGRetriever):
         }
         
         key_map = {
-            "category": "_category",
+            "doc_type": "_category", # legacy
             "base_doc_id": "base-doc-id",
         }
         
@@ -124,7 +124,7 @@ class KendraRetriever(BaseRAGRetriever):
         doc_meta = {
             "doc_id": metadata.get("document_id", ""),
             "doc_name": metadata.get("title", ""),
-            "category": metadata.get("document_attributes", {}).get("_category", ""),
+            "doc_type": metadata.get("document_attributes", {}).get("_category", ""),
             "version": metadata.get("document_attributes", {}).get("version", ""),
             "uri": metadata.get("document_attributes", {}).get("_source_uri", ""),
         }

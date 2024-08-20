@@ -8,6 +8,7 @@ from rag.managers.base import BasePipelineManager
 from rag.component import embeddings
 from rag.component.ingestor import *
 from rag import util
+from rag.config import IngestionConfig
 
 class IngestorManager(BasePipelineManager):
     def __init__(self) -> None:
@@ -21,9 +22,9 @@ class IngestorManager(BasePipelineManager):
         self.selected_ingestors: Optional[BaseRAGIngestor] = None
         
         
-    def set_config(self, config: dict):
-        self.ingestor_name = config.get("ingestor")
-        # self.embeddings_name = config.get("embedding")
+    def set_config(self, config: IngestionConfig) -> None:
+        self.ingestor_name = config.ingestor
+        self.source_lang = config.global_.lang.source
         
         if self.ingestor_name is None:
             msg.warn("INGESTOR not configured. Setting to None.")
@@ -32,7 +33,7 @@ class IngestorManager(BasePipelineManager):
             
         self.init_ingestor(config)
         
-    def init_ingestor(self, config: dict):
+    def init_ingestor(self, config: IngestionConfig):
         if self.ingestor_name is None:
             return
         
@@ -43,5 +44,4 @@ class IngestorManager(BasePipelineManager):
         if ingestor is None:
             msg.warn("No ingestor initialized. Skipping ingestion.")
             return False
-        
         return ingestor.ingest(chunks)

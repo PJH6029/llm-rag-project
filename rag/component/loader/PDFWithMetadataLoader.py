@@ -1,4 +1,4 @@
-from typing import Union, Optional, Iterator, Type, Any
+from typing import Union, Optional, Iterator, Type, Any, Callable
 from pathlib import Path
 from urllib.parse import urlparse
 import tempfile
@@ -6,22 +6,24 @@ import os, json
 from wasabi import msg
 import uuid
 
-from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
 
 from rag.type import *
 from rag import util
+from rag.component.loader.base import BaseRAGLoader, BaseLoader
 
-class PDFWithMetadataLoader(BaseLoader):
+class PDFWithMetadataLoader(BaseRAGLoader):
     def __init__(
         self, 
         file_path: str,
         *,
+        metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None,
         loader: Optional[Type[BaseLoader]] = None,
         loader_kwargs: dict[str, Any] = {},
         metadata_ext: str = ".metadata.json",
     ) -> None:
+        super().__init__(metadata_handler=metadata_handler)
         self.file_path = file_path
         # TODO handling specified location for metadata
         # currently, metadata is assumed to be in the same location as the file
@@ -52,7 +54,8 @@ class PDFWithMetadataLoader(BaseLoader):
         else:
             msg.info(f"Using loader: {loader.__name__}")
             self.loader = loader(
-                **{**loader_kwargs, "file_path": file_path_for_loader}
+                **loader_kwargs,
+                file_path=file_path_for_loader
             )
         
         try:
@@ -60,6 +63,7 @@ class PDFWithMetadataLoader(BaseLoader):
             with open(metadata_path_for_loader, "r") as f:
                 self.metadata = json.load(f)
         except FileNotFoundError:
+            msg.warn(f"Metadata not found: {metadata_path_for_loader}")
             self.metadata = {}
             
     def lazy_load(self) -> Iterator[Document]:
@@ -72,25 +76,6 @@ class PDFWithMetadataLoader(BaseLoader):
 
             yield document
     
-    def lazy_load_as_chunk(self) -> Iterator[Chunk]:
-        """Yield a single chunk from the document
-
-        Yields:
-            Iterator[Chunk]: A single chunk
-        """
-        for document in self.loader.lazy_load():
-            document.metadata["source"] = self.source # overwrite or add source
-            document.metadata.update(self.metadata)
-            
-            if not util.is_in_nested_keys(self.metadata, "doc_id"):
-                document.metadata["doc_id"] = document.metadata["source"]
-            
-            chunk = util.doc_to_chunk(document)
-            yield chunk
-        
-    def load_as_chunk(self) -> list[Chunk]:
-        return list(self.lazy_load_as_chunk())
-
     @staticmethod
     def _is_s3_url(url: str) -> bool:
         try:

@@ -15,6 +15,7 @@ from rag.component import embeddings
 from rag.type import *
 from rag.type import Chunk, Document
 from rag import util
+from rag.config import RetrievalConfig
 
 class PineconeMultiVectorRetriever(BaseRAGRetriever):
     PARENT_CHILD_FACTOR = 3
@@ -80,7 +81,7 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
     def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:  
         try:
             _queries = util.flatten_queries(queries)
-            
+
             if filter is not None:
                 filter_dict = self._arange_filter(filter)
             else:
@@ -89,7 +90,11 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             id_scores = dict()
             sub_chunk_cnt = 0
             
-            sub_chunks = self._get_retrieval_chain(len(_queries)).invoke({"queries": _queries, "filter": filter_dict, "top_k": int(self.top_k * self.PARENT_CHILD_FACTOR)})
+            sub_chunks = self._get_retrieval_chain(len(_queries)).invoke({
+                "queries": _queries, 
+                "filter": filter_dict, 
+                "top_k": int(self.top_k * self.PARENT_CHILD_FACTOR)
+            })
             sub_chunk_cnt = len(sub_chunks)
             
             for sub_chunk in sub_chunks:
@@ -133,6 +138,7 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             retrieved_chunks = [self.process_chunk(chunk_raw) for chunk_raw in retrieved_chunks_raw]
             retrieved_chunks = sorted(retrieved_chunks, key=lambda x: x.score, reverse=True)[:self.top_k]
             msg.info(f"Retrieved {len(retrieved_chunks)} chunks from parent vectorstore, based on {sub_chunk_cnt} sub chunks")
+            
             return retrieved_chunks
         except Exception as e:
             msg.warn(f"Error occurred during retrieval using {self.__class__.__name__}: {e}")
@@ -155,9 +161,9 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
         
         # TODO seperator
         key_map = {
-            "base_doc_id": "doc_meta___Attributes___base-doc-id",
-            "category": "doc_meta___Attributes____category",
-            "doc_type": "doc_meta___doc_type",
+            "base_doc_id": "doc_meta/base_doc_id",
+            "doc_type": "doc_meta/doc_type",
+            "category": "doc_meta/category",
         }
         
         if isinstance(filter, FilterPredicate):
@@ -183,23 +189,28 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
             chunk_id=util.MetadataSearch.search_chunk_id(metadata),
             doc_id=util.MetadataSearch.search_doc_id(metadata),
             doc_meta=util.remove_falsy({
-                "doc_id": util.MetadataSearch.search_doc_id(metadata),
+                # "doc_id": util.MetadataSearch.search_doc_id(metadata),
+                # "doc_name": doc_name,
+                # "doc_type": doc_meta.get("Attributes", {}).get("doc_type"),
+                # "base_doc_id": doc_meta.get("Attributes", {}).get("base_doc_id"),
+                # "version": doc_meta.get("Attributes", {}).get("version"),
+                **doc_meta,
                 "doc_name": doc_name,
-                "category": doc_meta.get("Attributes", {}).get("_category"),
-                "base_doc_id": doc_meta.get("Attributes", {}).get("base-doc-id"),
-                "version": doc_meta.get("Attributes", {}).get("version"),
             }),
-            chunk_meta={**chunk_meta, "score": metadata.get("score"), "chunk_id": util.MetadataSearch.search_chunk_id(metadata)},
+            chunk_meta=util.remove_falsy({
+                **chunk_meta, 
+                "score": metadata.get("score"), 
+            }),
             score=metadata.get("score"),
         )
         
     @classmethod
-    def from_config(cls, config: dict) -> "PineconeMultiVectorRetriever":
-        top_k = config.get("top_k", cls.DEFAULT_TOP_K)
-        parent_namespace = config.get("namespace")
-        child_namespace = config.get("sub-namespace")
+    def from_config(cls, config: RetrievalConfig) -> "PineconeMultiVectorRetriever":
+        top_k = config.top_k
+        parent_namespace = config.namespace
+        child_namespace = config.sub_namespace
         
-        embeddings_name = config.get("embeddings")
+        embeddings_name = config.embeddings
         embedding_model = embeddings.get_model(embeddings_name)
         
         vectorstore = PineconeVectorstore(

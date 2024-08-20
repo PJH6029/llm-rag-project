@@ -4,6 +4,7 @@ from rag.managers.retriever import RetrieverManager
 from rag.managers.generator import GeneratorManager
 from rag.managers.fact_verifier import FactVerifierManager
 from rag.managers.ingestor import IngestorManager
+from rag.managers.loader import LoaderManager
 
 __all__ = [
     "BasePipelineManager",
@@ -11,5 +12,6 @@ __all__ = [
     "RetrieverManager",
     "GeneratorManager",
     "FactVerifierManager",
-    IngestorManager
+    "IngestorManager",
+    "LoaderManager",
 ]

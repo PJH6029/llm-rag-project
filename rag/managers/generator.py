@@ -8,6 +8,7 @@ from rag.component import llm, prompt
 from rag.managers.base import BasePipelineManager
 from rag.type import Chunk, ChatLog
 from rag import util
+from rag.config import GenerationConfig
 
 class GeneratorManager(BasePipelineManager):
     def __init__(self) -> None:
@@ -16,10 +17,10 @@ class GeneratorManager(BasePipelineManager):
         self.prompt = None
         
     
-    def set_config(self, config: dict):
-        self.generator_name = config.get("model")
-        use_context_hierarchy = config.get("context-hierarchy", False)
-        self.user_lang = config.get("lang", {}).get("user", "Korean")
+    def set_config(self, config: GenerationConfig):
+        self.generator_name = config.model
+        use_context_hierarchy = config.global_.context_hierarchy
+        self.user_lang = config.global_.lang.user
         
         if use_context_hierarchy:
             _prompt = prompt.generation_with_hierarchy_prompt
@@ -36,8 +37,7 @@ class GeneratorManager(BasePipelineManager):
         if chain is None:
             return
         
-        for r in chain.stream({"query": query, "context": context, "history": history}):
-            yield r
+        yield from chain.stream({"query": query, "context": context, "history": history})
     
     def generate(
         self, query: str, history: str="", context: str=""

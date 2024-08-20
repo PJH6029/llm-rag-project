@@ -111,7 +111,7 @@ class KnowledgeBaseRetriever(BaseRAGRetriever):
         doc_meta = {
             "doc_id": metadata["source_metadata"]["x-amz-bedrock-kb-source-uri"],
             "doc_name": metadata["source_metadata"]["x-amz-bedrock-kb-source-uri"].split("/")[-1],
-            "category": metadata["source_metadata"]["category"],
+            "doc_type": metadata["source_metadata"]["category"], # legacy
             "version": metadata["source_metadata"]["version"],
             "uri": metadata["source_metadata"]["x-amz-bedrock-kb-source-uri"],
         }

@@ -46,15 +46,37 @@ from rag.component import embeddings
         
 #     print("-" * 10)
 
-if __name__ == "__main__":
-    embeddings_ = embeddings.get_model("text-embedding-3-small")
-    vectorstore = PineconeVectorstore(
-        embeddings=embeddings_,
-        namespace="child-upstage-overlap-backup",
-    )
+# if __name__ == "__main__":
+#     embeddings_ = embeddings.get_model("text-embedding-3-small")
+#     vectorstore = PineconeVectorstore(
+#         embeddings=embeddings_,
+#         namespace="child-upstage-overlap-backup",
+#     )
     
-    chunks = vectorstore.query(
-        "Deallocate behavior",
-    )
+#     chunks = vectorstore.query(
+#         "Deallocate behavior",
+#     )
     
-    print([chunk.doc_id for chunk in chunks])
+#     print([chunk.doc_id for chunk in chunks])
+
+
+doc_ids = set()
+with open("ingestor_logs.txt", "r") as f:
+    for line in f.readlines():
+        doc_id = line.split(",")[0].split("/")[-1].strip()
+        doc_ids.add(doc_id)
+        
+import os
+doc_lst = []
+for root, _, files in os.walk(os.path.join(os.getcwd(), "ref_docs", "Frequently Access Documents")):
+    for file in files:
+        if file.endswith(".pdf"):
+            doc_lst.append(file)
+
+print(doc_ids)
+print(len(doc_ids))
+print(doc_lst)
+print(len(doc_lst))
+
+dup = set([doc_id for doc_id in doc_ids if doc_lst.count(doc_id) > 1])
+print(dup)

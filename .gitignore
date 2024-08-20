@@ -15,3 +15,4 @@ evaluate/reference/*
 layout_backup/*
 layout_overlay_backup/*
 layout*/*
+ingestor_logs.txt

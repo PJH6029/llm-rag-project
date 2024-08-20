@@ -5,6 +5,7 @@ from rag.type import *
 from rag.component.ingestor.base import BaseRAGIngestor
 from rag.component.vectorstore.PineconeVectorstore import PineconeVectorstore
 from rag.component import embeddings
+from rag.config import IngestionConfig
 
 class PineconeVectorstoreIngestor(BaseRAGIngestor):
     def __init__(
@@ -23,9 +24,9 @@ class PineconeVectorstoreIngestor(BaseRAGIngestor):
         return self.vectorstore.ingest(chunks)
     
     @classmethod
-    def from_config(cls, config: dict) -> "PineconeVectorstoreIngestor":
-        embeddings_name = config.get("embeddings")
-        namespace = config.get("namespace")
+    def from_config(cls, config: IngestionConfig) -> "PineconeVectorstoreIngestor":
+        embeddings_name = config.embeddings
+        namespace = config.namespace
         
         embeddings_model = embeddings.get_model(embeddings_name)
         

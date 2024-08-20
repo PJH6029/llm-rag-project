@@ -35,15 +35,15 @@ def _write_source_docs_without_hierarchy(chunks: list[Chunk]):
     write_combined_chunks(combined_chunks)
 
 def write_source_docs(chunks: list[Chunk]):
-    if not all([chunk.doc_meta.get("category") for chunk in chunks]):
-        msg.warn("Some chunks do not have category information, cannot display hierarchy")
+    if not all([chunk.doc_meta.get("doc_type") for chunk in chunks]):
+        msg.warn("Some chunks do not have doc_type information, cannot display hierarchy")
         _write_source_docs_without_hierarchy(chunks)
         return
     
     combined_chunks = combine_chunks(chunks, attach_url=True)
     
-    combined_base_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("category") == "base"]
-    combined_additional_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("category") == "additional"]
+    combined_base_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("doc_type") == "base"]
+    combined_additional_chunks = [chunk for chunk in combined_chunks if chunk.doc_meta.get("doc_type") == "additional"]
     
     # base
     st.divider()

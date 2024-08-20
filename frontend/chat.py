@@ -8,7 +8,7 @@ from rag.api import api as rag_api
 from rag.type import GenerationResult, VerificationResult
 
 recent_fact_verification: Optional[VerificationResult] = None
-doc_types = []
+categories = []
 
 def generator_passthrough_with_cache(generator: Generator[GenerationResult, Any, Any]) -> Generator[str, Any, Any]:
     for item in generator:
@@ -27,14 +27,14 @@ def write_side_bar():
             write_source_docs(rag_api.recent_chunks)
 
 def run():
-    global doc_types
+    global categories
     session_init(st.session_state)
     display_chat_history(st.session_state)
     
     if user_input := st.chat_input("Enter a message (줄임말은 정확도를 떨어뜨릴 수 있습니다)..."):  
-        if "All" in doc_types:
-            doc_types = rag_api.get_doc_types()
-        print(doc_types)
+        if "All" in categories:
+            categories = rag_api.get_categories()
+        print(categories)
         
         with st.chat_message("user"):
             st.session_state.messages.append(
@@ -49,10 +49,10 @@ def run():
         with st.chat_message("assistant"):
             query = st.session_state.messages[-1]["content"]
             rag_generator = rag_api.query_stream(
-                query=query, history=st.session_state.translated_messages[:], doc_types=doc_types
+                query=query, history=st.session_state.translated_messages[:], categories=categories
             )
             # rag_generator = rag_api.fake_query_stream(
-            #     query=query, history=st.session_state.translated_messages[:], doc_types=doc_types
+            #     query=query, history=st.session_state.translated_messages[:], categories=categories
             # )
             
             with st.status("Understaning question...") as status:
@@ -109,9 +109,9 @@ def run():
     else:
         write_side_bar()
     
-    doc_types = st.multiselect(
+    categories = st.multiselect(
         "Select document types to search",
-        ["All"] + rag_api.get_doc_types(),
+        ["All"] + rag_api.get_categories(),
         default=["All"]
     )
 

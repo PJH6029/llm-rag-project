@@ -20,8 +20,8 @@ def lazy_chunk_with(
                 text=splitted_text,
                 doc_id=chunk.doc_id,
                 chunk_id=f"{chunk.chunk_id}-{i}",
-                doc_meta=chunk.doc_meta,
-                chunk_meta={**chunk.chunk_meta, "chunk_id": f"{chunk.chunk_id}-{i}"},
+                doc_meta={**chunk.doc_meta},
+                chunk_meta={**chunk.chunk_meta},
             )
             if with_parent_mark:
                 sub_chunk.chunk_meta[parent_id_key] = chunk.chunk_id

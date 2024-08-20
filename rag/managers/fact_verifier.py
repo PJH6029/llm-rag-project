@@ -7,6 +7,7 @@ from rag.managers.base import BasePipelineManager
 from rag.type import VerificationResult
 from rag import util
 from rag.component import llm, prompt
+from rag.config import FactVerificationConfig
 
 class FactVerifierManager(BasePipelineManager):
     def __init__(self) -> None:
@@ -14,11 +15,10 @@ class FactVerifierManager(BasePipelineManager):
         self.verifier_name = None
         self.enable = False
         
-    def set_config(self, config: dict):
-        self.verifier_name = config.get("model")
-        self.enable = config.get("enable", False)
-        self.user_lang = config.get("lang", {}).get("user", "Korean")
-        
+    def set_config(self, config: FactVerificationConfig):
+        self.verifier_name = config.model
+        self.enable = config.enable
+        self.user_lang = config.global_.lang.user
         self.prompt = prompt.verification_prompt.partial(lang=self.user_lang)
         
         msg.info(f"Setting FACT_VERIFIER to {self.verifier_name}")
@@ -57,5 +57,4 @@ class FactVerifierManager(BasePipelineManager):
             return None
                 
         chain = self.prompt | verifier | JsonOutputParser(pydantic_object=VerificationResult)
-        response = chain.invoke({"response": response, "context": context})
-        return VerificationResult.model_validate(response)
+        return VerificationResult(**chain.invoke({"response": response, "context": context}))

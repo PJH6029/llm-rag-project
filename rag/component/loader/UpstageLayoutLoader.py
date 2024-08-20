@@ -1,17 +1,20 @@
-from typing import Iterator, Deque, Literal
+from typing import Iterator, Deque, Literal, Optional, Callable
 from markdownify import markdownify as md
 from wasabi import msg
 import os
+import re
+import json
 from collections import deque
 
 from langchain_core.documents import Document
-from langchain_core.document_loaders import BaseLoader
 from langchain_upstage import UpstageLayoutAnalysisLoader
 from langchain_upstage.layout_analysis import OutputType, SplitType
 
+from rag.component.loader.base import BaseRAGLoader
+from rag.type import *
 from rag import util
 
-class UpstageLayoutLoader(BaseLoader):
+class UpstageLayoutLoader(BaseRAGLoader):
     def __init__(
         self,
         file_path: str,
@@ -23,7 +26,11 @@ class UpstageLayoutLoader(BaseLoader):
         cache_to_local: bool = False,
         backup_dir: str = "./layout_backup",
         source_type: Literal["path", "name"] = "path",
+        metadata_ext: str = ".metadata.json",
+        *,
+        metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None,
     ) -> None:
+        super().__init__(metadata_handler=metadata_handler)
         self.file_path = file_path
         self.file_name = os.path.basename(file_path)
         
@@ -37,6 +44,7 @@ class UpstageLayoutLoader(BaseLoader):
         self.cache_to_local = cache_to_local
         self.overlap_elem_size = overlap_elem_size
         self.backup_dir = backup_dir
+        self.metadata_ext = metadata_ext
         
         dir_name = os.path.splitext(os.path.basename(file_path))[0]
         if self.cache_to_local and os.path.exists(f"{self.backup_dir}/html/{dir_name}"):
@@ -54,14 +62,16 @@ class UpstageLayoutLoader(BaseLoader):
         
         if self.cache_to_local:
             msg.info(f"Saving HTML into local: {file_name_without_ext}_{document.metadata.get('page')}.html")
-            util.save_to_local(document, f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html")
-        
+            util.save_to_local(document.page_content, f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html")
+            util.save_to_local(json.dumps(document.metadata), f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html{self.metadata_ext}")
+                
         if self.to_markdown:
-            document.page_content = md(document.page_content)
+            document.page_content = util.markdownify(document.page_content)
             
             if self.cache_to_local:
                 msg.info(f"Saving Markdown into local: {file_name_without_ext}_{document.metadata.get('page')}.md")
-                util.save_to_local(document, f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md")
+                util.save_to_local(document.page_content, f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md")
+                util.save_to_local(json.dumps(document.metadata), f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md{self.metadata_ext}")
         
         document.metadata["source"] = self.source
         
@@ -127,3 +137,62 @@ class UpstageLayoutLoader(BaseLoader):
         metadata["page"] = page
         
         return Document(page_content=page_content, metadata=metadata)
+    
+class UpstageLayoutBackupDirLoader(BaseRAGLoader):
+    def __init__(
+        self, 
+        backup_dir: str,
+        metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None, 
+        metadata_ext: str = ".metadata.json",
+    ) -> None:
+        super().__init__(metadata_handler)
+        self.metadata_json_ext = metadata_ext
+        self.backup_dir = backup_dir
+        
+        html_dir = f"{backup_dir}/html"
+        md_dir = f"{backup_dir}/markdown"
+        
+        if os.path.exists(md_dir):
+            self.data_source_dir = md_dir
+            self.data_source_ext = ".md"
+        else:
+            self.data_source_dir = html_dir
+            self.data_source_ext = "."
+            
+    def lazy_load(self) -> Iterator[Document]:
+        for root, _, files in os.walk(self.data_source_dir):
+            for file in files:
+                if not file.endswith(self.data_source_ext):
+                    continue
+                file_path = os.path.join(root, file)
+                yield self._doc_from_backup_page(file_path)
+        
+    def _doc_from_backup_page(self, page_file_path: str) -> Document:
+        file_name = os.path.basename(page_file_path)
+        file_name_without_ext = os.path.splitext(file_name)[0]
+        
+        page = int(file_name_without_ext.split("_")[-1])
+        pdf_file_name = "_".join(file_name_without_ext.split("_")[:-1]) + ".pdf"
+        
+        doc_id = pdf_file_name
+        
+        with open(page_file_path, "r") as f:
+            content = f.read()
+        
+        metadata_path = f"{page_file_path}{self.metadata_json_ext}"
+        if os.path.exists(metadata_path):
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
+        
+        document = Document(
+            page_content=content,
+            metadata={
+                "doc_id": doc_id,
+                "page": page,
+                **metadata
+            }
+        )
+        
+        return document

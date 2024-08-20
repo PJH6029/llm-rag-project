@@ -29,8 +29,9 @@ class HierarchicalRetriever(BaseRAGRetriever):
         
     def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:
         # base context retrieval
-        base_filter = FilterUtil.from_dict({"equals": {"key": "category", "value": "base"}})
+        base_filter = FilterUtil.from_dict({"equals": {"key": "doc_type", "value": "base"}})
         base_filter = FilterUtil.and_all(base_filter, filter) if filter else base_filter
+        print(base_filter)
         base_chunks = self.retriever.retrieve(
             queries, filter=base_filter
         )
@@ -40,11 +41,12 @@ class HierarchicalRetriever(BaseRAGRetriever):
         base_doc_ids = list(set([c.doc_id for c in managed_base_chunks])) + ["*"] # include additional docs not linked to any base doc
         additional_filters = FilterUtil.from_dict({
             "andAll": [
-                {"equals": {"key": "category", "value": "additional"}}, 
+                {"equals": {"key": "doc_type", "value": "additional"}}, 
                 {"in": {"key": "base_doc_id", "value": base_doc_ids}}
             ]
         })
         additional_filters = FilterUtil.and_all(additional_filters, filter) if filter else additional_filters
+        print(additional_filters)
         additional_chunks = self.retriever.retrieve(
             queries, filter=additional_filters
         )
@@ -57,29 +59,29 @@ class HierarchicalRetriever(BaseRAGRetriever):
     
     def validate(self, chunks: list[Chunk]) -> None:
         """Validate the retrieved chunks.
-            - category should be in ["base", "additional"]
+            - doc_type should be in ["base", "additional"]
             - base doc id of additional chunks should be in base chunks
         Args:
             chunks (list[Chunk]): The chunks to validate.
         """
         msg.info("Validating retrieved chunks...")
-        # category should be in ["base", "additional"]
+        # doc_type should be in ["base", "additional"]
         try:
             for chunk in chunks:
-                category = chunk.doc_meta.get("category")
-                assert category in ["base", "additional"]
+                doc_type = chunk.doc_meta.get("doc_type")
+                assert doc_type in ["base", "additional"]
         except Exception as e:
-            msg.fail(f"Validation failed: {e} Category should be in ['base', 'additional']")
+            msg.fail(f"Validation failed: {e} doc_type should be in ['base', 'additional']")
             return
         
         # base doc id of additional chunks should be in base chunks
         try:
             base_chunk_ids = set([
-                chunk.doc_id for chunk in chunks if chunk.doc_meta.get("category") == "base"
+                chunk.doc_id for chunk in chunks if chunk.doc_meta.get("doc_type") == "base"
             ] + ["*"])
             
             for chunk in chunks:
-                if chunk.doc_meta.get("category") == "additional":
+                if chunk.doc_meta.get("doc_type") == "additional":
                     base_doc_id = chunk.doc_meta.get("base_doc_id")
                     assert base_doc_id in base_chunk_ids
         except Exception as e:
