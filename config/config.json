@@ -38,7 +38,7 @@
             "model": "gpt-4o"
         },
         "fact_verification": {
-            "model": "gpt-4o-mini",
+            "model": "gpt-4o",
             "enable": true
         }
     }
