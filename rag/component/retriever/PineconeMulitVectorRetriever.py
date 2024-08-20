@@ -157,6 +157,7 @@ class PineconeMultiVectorRetriever(BaseRAGRetriever):
         key_map = {
             "base_doc_id": "doc_meta___Attributes___base-doc-id",
             "category": "doc_meta___Attributes____category",
+            "doc_type": "doc_meta___doc_type",
         }
         
         if isinstance(filter, FilterPredicate):

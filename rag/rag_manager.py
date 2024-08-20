@@ -94,12 +94,15 @@ class RAGManager:
             msg.info(f"Transformed queries: {queries}")
             return queries
 
-    def retrieve(self, queries: TransformationResult) -> list[Chunk]:
+    def retrieve(self, queries: TransformationResult, doc_types: list[str]=None) -> list[Chunk]:
         with time_logger(
             lambda: f"Retrieving with {len(queries)} queries...",
             lambda: f"{len(chunks)} chunks retrieved"
         ):
-            chunks = self.managers.retrieval.retrieve(queries)
+            chunks = self.managers.retrieval.retrieve(
+                queries,
+                filter = {"in": {"key": "doc_type", "value": doc_types}} if doc_types else None
+            )
             return chunks
 
     def generate(
@@ -191,3 +194,16 @@ class RAGManager:
         ):
             success = util.upload_to_s3_with_metadata(file_path, object_location=object_location)
             return success
+
+    def get_doc_types(self) -> list[str]:
+        return [
+            "APPLE",
+            "Google",
+            "MCTP",
+            "MS",
+            "NVMe",
+            "NVMe-MI",
+            "OCP/2.0",
+            "OCP/2.5",
+            "PCIe",
+        ]

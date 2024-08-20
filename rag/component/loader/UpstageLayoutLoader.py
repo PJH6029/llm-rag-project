@@ -43,6 +43,7 @@ class UpstageLayoutLoader(BaseLoader):
             msg.warn(f"Backup directory already exists: {self.backup_dir}/<html or md>/{dir_name}")
     
     def _lazy_load_non_overlap(self) -> Iterator[Document]:
+        # layout loader loads pages in order
         for document in self.layout_loader.lazy_load():
             document = self._process(document)
             yield document
@@ -73,6 +74,7 @@ class UpstageLayoutLoader(BaseLoader):
         current_page = None
         first_trial = True
         
+        # layout loader loads elements in order
         for elem_doc in self.layout_loader.lazy_load():
             page = elem_doc.metadata.get("page")
             if page is None:
@@ -121,8 +123,6 @@ class UpstageLayoutLoader(BaseLoader):
             [elem_doc.page_content for elem_doc in elem_docs]
         )
         
-        # metadata except for page should be the same # TODO bounding_box, category(tagname), id are different
-        # metadata = elem_docs[0].metadata
         metadata = {}
         metadata["page"] = page
         

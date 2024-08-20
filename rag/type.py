@@ -46,6 +46,7 @@ class CombinedChunks(BaseModel):
     doc_id: str = ""
     doc_meta: dict = {}
     doc_mean_score: float = 0.0
+    doc_max_score: float = 0.0
     link: str = ""
     
 

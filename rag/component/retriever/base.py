@@ -31,6 +31,10 @@ class BaseRAGRetriever:
 
 class FilterUtil:
     @staticmethod
+    def and_all(*filters: Filter) -> Filter:
+        return FilterExpression(op="andAll", predicates=filters)
+    
+    @staticmethod
     def from_any(filter: Any) -> Filter:
         if isinstance(filter, Filter):
             return filter

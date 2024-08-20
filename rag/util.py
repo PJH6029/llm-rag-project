@@ -24,7 +24,7 @@ def load_config(config_path = "config/config.json") -> dict:
         rag_config = config.get("rag", {})
         global_config = config.get("global", {})
         rag_config.get("global", {}).update(global_config)
-        return rag_config # TODO language
+        return rag_config
     except Exception as e:
         msg.fail(f"Failed to load config: {e}")
         return {}
@@ -63,12 +63,14 @@ def combine_chunks(chunks: list[Chunk], attach_url=False) -> list[CombinedChunks
                 combined_chunks[chunk.doc_id].link = get_presigned_url(chunk.doc_id)
         combined_chunks[chunk.doc_id].chunks.append(chunk)
         combined_chunks[chunk.doc_id].doc_mean_score += chunk.score
+        combined_chunks[chunk.doc_id].doc_max_score = max(combined_chunks[chunk.doc_id].doc_max_score, chunk.score)
 
     for combined_chunk in combined_chunks.values():
         combined_chunk.doc_mean_score /= len(combined_chunk.chunks)
     
     combined_chunks_list = list(combined_chunks.values())
     combined_chunks_list = sorted(combined_chunks_list, key=lambda x: x.doc_mean_score, reverse=True)
+    combined_chunks_list = sorted(combined_chunks_list, key=lambda x: x.doc_max_score, reverse=True)
     return combined_chunks_list
 
 def _format_combined_chunks(combined_chunks: list[CombinedChunks]) -> str:

@@ -29,20 +29,24 @@ class HierarchicalRetriever(BaseRAGRetriever):
         
     def retrieve(self, queries: TransformationResult, filter: Filter | None = None) -> list[Chunk]:
         # base context retrieval
+        base_filter = FilterUtil.from_dict({"equals": {"key": "category", "value": "base"}})
+        base_filter = FilterUtil.and_all(base_filter, filter) if filter else base_filter
         base_chunks = self.retriever.retrieve(
-            queries, filter=FilterUtil.from_dict({"equals": {"key": "category", "value": "base"}})
+            queries, filter=base_filter
         )
         managed_base_chunks = base_chunks[:int(self.top_k * self.BASE_RATIO)]
         
         # additional context retrieval 
         base_doc_ids = list(set([c.doc_id for c in managed_base_chunks])) + ["*"] # include additional docs not linked to any base doc
+        additional_filters = FilterUtil.from_dict({
+            "andAll": [
+                {"equals": {"key": "category", "value": "additional"}}, 
+                {"in": {"key": "base_doc_id", "value": base_doc_ids}}
+            ]
+        })
+        additional_filters = FilterUtil.and_all(additional_filters, filter) if filter else additional_filters
         additional_chunks = self.retriever.retrieve(
-            queries, filter=FilterUtil.from_dict({
-                "andAll": [
-                    {"equals": {"key": "category", "value": "additional"}}, 
-                    {"in": {"key": "base_doc_id", "value": base_doc_ids}}
-                ]
-            })
+            queries, filter=additional_filters
         )
         managed_additional_chunks = additional_chunks[:self.top_k - len(managed_base_chunks)]
         

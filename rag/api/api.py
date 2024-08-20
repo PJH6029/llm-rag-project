@@ -40,10 +40,6 @@ DEFAULT_RAG_CONFIG = {
         
         "embeddings": "text-embedding-3-small", # may be optional
         "top_k": 6, # for multi-vector retriever, context size is usually big. Use small top_k
-        "post_retrieval": {
-            "rerank": True,
-            # TODO
-        }
     },
     "generation": { # mandatory
         "model": "gpt-4o",
@@ -94,14 +90,18 @@ def query(query: str, history: list[ChatLog]=None) -> GenerationResult:
     return {"transformation": queries, "retrieval": chunks, "generation": generation_response, "fact_verification": verification_response.model_dump()}
     
 
-def query_stream(query: str, history: list[ChatLog]=None) -> Generator[GenerationResult, None, None]:
+def query_stream(
+    query: str, 
+    history: list[ChatLog]=None,
+    doc_types: list[str]=None,
+) -> Generator[GenerationResult, None, None]:
     history = history or []
     with get_openai_callback() as cb:
         queries = rag_manager.transform_query(query, history)
         yield {"transformation": queries}
         
         translated_query = queries["translation"]
-        chunks = rag_manager.retrieve(queries)
+        chunks = rag_manager.retrieve(queries, doc_types)
         yield {"retrieval": chunks}
         
         global recent_chunks, recent_translated_query
@@ -113,10 +113,23 @@ def query_stream(query: str, history: list[ChatLog]=None) -> Generator[Generatio
             yield {"generation": response}
             generation_response += response
         
-        # TODO visualize the result in frontend
         yield {"fact_verification": rag_manager.verify_fact(generation_response, chunks)}
         
         print(cb)
+        
+def fake_query_stream(
+    query: str, 
+    history: list[ChatLog]=None,
+    doc_types: list[str]=None,
+) -> Generator[GenerationResult, None, None]:
+    global recent_chunks, recent_translated_query
+    recent_chunks = [Chunk(text="chunk 1", doc_id="doc#1", chunk_id="chunk#1"), Chunk(text="chunk 2", doc_id="doc#2", chunk_id="chunk#2")]
+    recent_translated_query = "translated query"
+    
+    yield {"transformation": {"translation": "translated query"}}
+    yield {"retrieval": [Chunk(text="chunk 1", doc_id="doc#1", chunk_id="chunk#1"), Chunk(text="chunk 2", doc_id="doc#2", chunk_id="chunk#2")]}
+    yield {"generation": "generated response"}
+    yield {"fact_verification": VerificationResult(**{"verification": True, "reasoning": "reasoning"})}
     
 def upload_data(file_path: str, object_location: str) -> bool:
     return rag_manager.upload_data(file_path, object_location)
@@ -129,3 +142,6 @@ async def aingest_data(s3_url: str) -> int:
 
 def ingest_from_backup(backup_dir: str, object_location: str) -> int:
     return rag_manager.ingest_from_backup(backup_dir, object_location)
+
+def get_doc_types() -> list[str]:
+    return rag_manager.get_doc_types()

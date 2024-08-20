@@ -32,10 +32,7 @@
             "namespace": "parent-upstage-overlap-backup",
             "sub-namespace": "child-upstage-overlap-backup",
             "embeddings": "text-embedding-3-small",
-            "top_k": 6,
-            "post_retrieval": {
-                "rerank": true
-            }
+            "top_k": 6
         },
         "generation": {
             "model": "gpt-4o"

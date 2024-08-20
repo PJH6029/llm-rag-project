@@ -29,9 +29,7 @@ class RetrieverManager(BasePipelineManager):
         self.selected_retriever_names: list[str] = []
         self.use_context_hierarchy: bool = False
         self.weights: list[float] = []
-        
-        self.post_retrieval_config: dict = {}
-        
+                
         self.selected_retriever: Optional[BaseRAGRetriever] = None
 
 
@@ -54,8 +52,6 @@ class RetrieverManager(BasePipelineManager):
         
         self.weights = config.get("weights", [])
         self.use_context_hierarchy = config.get("context-hierarchy", False)
-
-        self.post_retrieval_config = config.get("post_retrieval", {}) # TODO
         
         self.init_retriever(config)
     

@@ -8,6 +8,7 @@ from rag.api import api as rag_api
 from rag.type import GenerationResult, VerificationResult
 
 recent_fact_verification: Optional[VerificationResult] = None
+doc_types = []
 
 def generator_passthrough_with_cache(generator: Generator[GenerationResult, Any, Any]) -> Generator[str, Any, Any]:
     for item in generator:
@@ -19,11 +20,22 @@ def generator_passthrough_with_cache(generator: Generator[GenerationResult, Any,
             global recent_fact_verification
             recent_fact_verification = fact_verification
 
+def write_side_bar():
+    if rag_api.recent_chunks is not None:
+        with st.sidebar:
+            st.markdown("# Source Documents")
+            write_source_docs(rag_api.recent_chunks)
+
 def run():
+    global doc_types
     session_init(st.session_state)
     display_chat_history(st.session_state)
-
-    if user_input := st.chat_input("Enter a message (줄임말은 정확도를 떨어뜨릴 수 있습니다)..."):
+    
+    if user_input := st.chat_input("Enter a message (줄임말은 정확도를 떨어뜨릴 수 있습니다)..."):  
+        if "All" in doc_types:
+            doc_types = rag_api.get_doc_types()
+        print(doc_types)
+        
         with st.chat_message("user"):
             st.session_state.messages.append(
                 {
@@ -36,7 +48,12 @@ def run():
         
         with st.chat_message("assistant"):
             query = st.session_state.messages[-1]["content"]
-            rag_generator = rag_api.query_stream(query=query, history=st.session_state.translated_messages[:])
+            rag_generator = rag_api.query_stream(
+                query=query, history=st.session_state.translated_messages[:], doc_types=doc_types
+            )
+            # rag_generator = rag_api.fake_query_stream(
+            #     query=query, history=st.session_state.translated_messages[:], doc_types=doc_types
+            # )
             
             with st.status("Understaning question...") as status:
                 start = time.time()
@@ -68,11 +85,8 @@ def run():
                 with st.expander(label):
                     st.write(recent_fact_verification.reasoning)
 
-        with st.sidebar:
-            st.markdown("# Source Documents")
-            write_source_docs(rag_api.recent_chunks)
+        write_side_bar()
 
-            
         st.session_state.translated_messages.append(
             {
                 "role": "Human",
@@ -92,6 +106,13 @@ def run():
             }
         )
 
-
+    else:
+        write_side_bar()
+    
+    doc_types = st.multiselect(
+        "Select document types to search",
+        ["All"] + rag_api.get_doc_types(),
+        default=["All"]
+    )
 
 

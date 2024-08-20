@@ -33,10 +33,6 @@ _config = {
         
         "embeddings": "text-embedding-3-small", # may be optional
         "top_k": 3, # for multi-vector retriever, context size is usually big. Use small top_k
-        "post_retrieval": {
-            "rerank": True,
-            # TODO
-        }
     },
     "generation": { # mandatory
         "model": "gpt-4o",

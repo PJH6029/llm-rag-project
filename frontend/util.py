@@ -67,7 +67,7 @@ def write_combined_chunks(combined_chunks: list[CombinedChunks]) -> None:
         for j, chunk in enumerate(combined_chunk.chunks):
             try:
                 page = int(chunk.chunk_meta.get("page"))
-            except ValueError:
+            except (ValueError, TypeError):
                 msg.warn(f"Page number is not an integer: {chunk.chunk_meta.get('page')}")
                 page = None
             with st.expander(f"### Chunk {j+1} (page: {page if page else 'N/A'}, score: {chunk.score:.2f})"):
