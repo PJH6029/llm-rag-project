@@ -1,209 +1,149 @@
-from typing import Generator, Iterable, Optional, Callable, Any, TypedDict
+from typing import Generator, Any
 from wasabi import msg
-import time
-import os
 
-from langchain_core.documents import Document
+from langchain_community.callbacks import get_openai_callback
+from langchain.globals import set_debug
 
-from rag.managers import (
-    BasePipelineManager,
-    TransformerManager,
-    RetrieverManager,
-    GeneratorManager,
-    FactVerifierManager,
-    IngestorManager
-)
-from rag.type import *
+from rag.rag_manager import RAGManager
 from rag import util
-from rag.component import chunker, loader
+from rag.type import *
 
-class time_logger:
-    def __init__(self, start_msg_callback: Callable, end_msg_callback: Callable) -> None:
-        self.start_msg_callback = start_msg_callback
-        self.end_msg_callback = end_msg_callback
-        self.start = 0
-    
-    def __enter__(self) -> None:
-        msg.info(self.start_msg_callback())
-        self.start = time.time()
-    
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        end = time.time()
-        msg.good(f"{self.end_msg_callback()} ({end - self.start:.2f}s)")
+DEFAULT_RAG_CONFIG = {
+    "global": {
+        "context-hierarchy": True, # used in selecting retriever and generation prompts
+    },
+    "ingestion": { # optional
+        "ingestor": "pinecone-multivector",
+        "embeddings": "text-embedding-3-small",
+        "namespace": "parent-upstage-overlap-backup",
+        "sub-namespace": "child-upstage-overlap-backup",
+    },
+    "transformation": { # optional
+        "model": "gpt-4o-mini",
+        "enable": {
+            "translation": True,
+            "rewriting": True,
+            "expansion": False,
+            "hyde": True,
+        },
+    },
+    "retrieval": { # mandatory
+        # "retriever": ["pinecone-multivector", "kendra"],
+        "retriever": ["pinecone-multivector"],
+        # "retriever": ["kendra"],
+        # "weights": [0.5, 0.5],
         
-class Managers(TypedDict):
-    ingestor: IngestorManager
-    transformer: TransformerManager
-    retriever: RetrieverManager
-    generator: GeneratorManager
-    fact_verifier: FactVerifierManager
-    
-ManagerKey = Literal["ingestor", "transformer", "retriever", "generator", "fact_verifier"]
-ManagerValue = Union[IngestorManager, TransformerManager, RetrieverManager, GeneratorManager, FactVerifierManager]
-
-class ManagersDict():
-    @classmethod
-    def from_dict(cls, dict: Managers) -> "ManagersDict":
-        managers = ManagersDict()
-        for k, v in dict.items():
-            managers[k] = v
-        return managers
-    
-    def __init__(self) -> None:
-        self.ingestion: Optional[IngestorManager] = None
-        self.transformation: Optional[TransformerManager] = None
-        self.retrieval: Optional[RetrieverManager] = None
-        self.generation: Optional[GeneratorManager] = None
-        self.fact_verification: Optional[FactVerifierManager] = None
-    
-    def __getitem__(self, key: ManagerKey) -> ManagerValue:
-        return getattr(self, key)
-
-    def __setitem__(self, key: ManagerKey, value: ManagerValue) -> None:
-        setattr(self, key, value)
+        "namespace": "parent-upstage-overlap-backup",
+        "sub-namespace": "child-upstage-overlap-backup",
+        # "namespace": "parent-upstage-backup",
+        # "sub-namespace": "child-upstage-backup",
         
-    def items(self) -> list[tuple[ManagerKey, ManagerValue]]:
-        return [(k, v) for k, v in self.__dict__.items() if isinstance(v, ManagerValue)]
+        "embeddings": "text-embedding-3-small", # may be optional
+        "top_k": 6, # for multi-vector retriever, context size is usually big. Use small top_k
+    },
+    "generation": { # mandatory
+        "model": "gpt-4o",
+    },
+    "fact_verification": { # optional
+        "model": "gpt-4o-mini",
+        "enable": False,
+    },
+}
 
-class RAGManager:
-    def __init__(self) -> None:
-        self.managers = ManagersDict.from_dict({
-            "ingestion": IngestorManager(),
-            "transformation": TransformerManager(),
-            "retrieval": RetrieverManager(),
-            "generation": GeneratorManager(),
-            "fact_verification": FactVerifierManager()
-        })
+recent_chunks = None
+recent_translated_query = None
+rag_manager = None
+
+def init():
+    # set_debug(True)
+    
+    util.load_secrets()
+    global rag_manager
+    rag_manager = RAGManager()
+    
+    config = util.load_config()
+    if config is None:
+        msg.warn("No config provided. Using default config.")
+        _config = DEFAULT_RAG_CONFIG
+    else:
+        _config = config
+    
+    rag_manager.set_config(_config)
+
+init()
+    
+def query(query: str, history: list[ChatLog]=None) -> GenerationResult:
+    history = history or []
+    with get_openai_callback() as cb:
+        queries = rag_manager.transform_query(query, history)
+        translated_query = queries["translation"]
+        chunks = rag_manager.retrieve(queries)
         
-        self.config = {}
-    
-    def set_config(self, config: dict):
-        self.config = {**config}
-        self.global_config = config.get("global", {})
+        global recent_chunks, recent_translated_query
+        recent_chunks = chunks
+        recent_translated_query = translated_query
+
+        generation_response = rag_manager.generate(translated_query, history, chunks)
+        verification_response = rag_manager.verify_fact(generation_response, chunks)
         
-        for manager_key, manager in self.managers.items():
-            manager.set_config(util.merge_configs(config.get(manager_key, {}), self.global_config))
-        msg.good("RAGManager successfully configured")
+        print(cb)
+    return util.remove_falsy({"transformation": queries, "retrieval": chunks, "generation": generation_response, "fact_verification": verification_response})
+    
+
+def query_stream(
+    query: str, 
+    history: list[ChatLog]=None,
+    doc_types: list[str]=None,
+) -> Generator[GenerationResult, None, None]:
+    history = history or []
+    with get_openai_callback() as cb:
+        queries = rag_manager.transform_query(query, history)
+        yield {"transformation": queries}
         
-    def transform_query(self, query: str, history: list[ChatLog]) -> TransformationResult:
-        with time_logger(
-            lambda: f"Transforming query `{query}` with {len(history)} history...",
-            lambda: f"Query transformed into {len(queries)} queries"
-        ):
-            queries = self.managers.transformation.transform(query, history)
-            msg.info(f"Transformed queries: {queries}")
-            return queries
-
-    def retrieve(self, queries: TransformationResult, doc_types: list[str]=None) -> list[Chunk]:
-        with time_logger(
-            lambda: f"Retrieving with {len(queries)} queries...",
-            lambda: f"{len(chunks)} chunks retrieved"
-        ):
-            chunks = self.managers.retrieval.retrieve(
-                queries,
-                filter = {"in": {"key": "doc_type", "value": doc_types}} if doc_types else None
-            )
-            return chunks
-
-    def generate(
-        self, 
-        query: str, 
-        history: Optional[list[ChatLog]] = None, 
-        chunks: Optional[list[Chunk]] = None
-    ) -> str:
-        chunks = chunks or []
-        history = history or []
+        translated_query = queries["translation"]
+        chunks = rag_manager.retrieve(queries, doc_types)
+        yield {"retrieval": chunks}
         
-        with time_logger(
-            lambda: f"Querying with: `{query}` and {len(history)} history...",
-            lambda: f"Query completed"
-        ):
-            context = util.format_chunks(chunks, self.global_config.get("context-hierarchy", False))
-            history_str = util.format_history(history)
-            
-            generation_response = self.managers.generation.generate(query, history_str, context)
-            
-            return generation_response
-    
-    def generate_stream(
-        self, 
-        query: str, 
-        history: Optional[list[ChatLog]] = None, 
-        chunks: Optional[list[Chunk]] = None
-    ) -> Generator[str, None, None]:
-        chunks = chunks or []
-        history = history or []
+        global recent_chunks, recent_translated_query
+        recent_chunks = chunks
+        recent_translated_query = translated_query
+
+        generation_response = ""
+        for response in rag_manager.generate_stream(translated_query, history, chunks):
+            yield {"generation": response}
+            generation_response += response
         
-        with time_logger(
-            lambda: f"Querying with: `{query}` and {len(history)} history...",
-            lambda: f"Query completed"
-        ):
-            context = util.format_chunks(chunks, self.global_config.get("context-hierarchy", False))
-            history_str = util.format_history(history)
-            
-            yield from self.managers.generation.generate_stream(query, history_str, context)
+        verification = rag_manager.verify_fact(generation_response, chunks)
+        if verification is not None:
+            yield {"fact_verification": verification}
+        
+        print(cb)
+        
+def fake_query_stream(
+    query: str, 
+    history: list[ChatLog]=None,
+    doc_types: list[str]=None,
+) -> Generator[GenerationResult, None, None]:
+    global recent_chunks, recent_translated_query
+    recent_chunks = [Chunk(text="chunk 1", doc_id="doc#1", chunk_id="chunk#1"), Chunk(text="chunk 2", doc_id="doc#2", chunk_id="chunk#2")]
+    recent_translated_query = "translated query"
     
-    def verify_fact(self, response: str, chunks: list[Chunk]) -> VerificationResult:
-        with time_logger(
-            lambda: f"Verifying fact...",
-            lambda: f"Fact verification completed"
-        ):
-            context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
-            verification_response = self.managers.fact_verification.verify(response, context)
-            return verification_response
+    yield {"transformation": {"translation": "translated query"}}
+    yield {"retrieval": [Chunk(text="chunk 1", doc_id="doc#1", chunk_id="chunk#1"), Chunk(text="chunk 2", doc_id="doc#2", chunk_id="chunk#2")]}
+    yield {"generation": "generated response"}
+    yield {"fact_verification": VerificationResult(**{"verification": True, "reasoning": "reasoning"})}
+    
+def upload_data(file_path: str, object_location: str) -> bool:
+    return rag_manager.upload_data(file_path, object_location)
 
-    
-    # def verify_fact_stream(self, response: str, chunks: list[Chunk]) -> Generator[str, None, None]:
-    #     with time_logger(
-    #         lambda: f"Verifying fact...",
-    #         lambda: f"Fact verification completed"
-    #     ):
-    #         context = util.format_chunks(chunks or [], self.global_config.get("context-hierarchy", False))
-    #         yield from self.managers.fact_verification.verify_stream(response, context)
-    
-    def _ingest_with_loader(self, loader: Iterable[Chunk], batch_size: int = 20) -> int:
-        with time_logger(
-            lambda: f"Ingesting data...",
-            lambda: f"Data ingested"
-        ):
-            chunks_cnt = util.execute_as_batch(
-                loader,
-                batch_size=batch_size,
-                func=self.managers.ingestion.ingest
-            )
-            return chunks_cnt
-    
-    def ingest(self, file_path: str, batch_size: int = 20) -> int:
-        chunks_iter = loader.lazy_load(file_path)
-        return self._ingest_with_loader(chunks_iter, batch_size=batch_size)
-    
-    def aingest(self, data_url: str, batch_size: int = 20) -> int:
-        # TODO
-        return -1
-    
-    def ingest_from_backup(
-        self, backup_dir: str, object_location: str, batch_size: int = 20
-    ) -> int:
-        chunks_iter = loader.lazy_load_from_backup(backup_dir, object_location)
-        return self._ingest_with_loader(chunks_iter, batch_size=batch_size)
+def ingest_data(file_path: str) -> int:
+    return rag_manager.ingest(file_path)
 
-    def upload_data(self, file_path: str, object_location: str) -> bool:
-        with time_logger(
-            lambda: f"Uploading data from {file_path} to {object_location}...",
-            lambda: f"Data uploaded"
-        ):
-            success = util.upload_to_s3_with_metadata(file_path, object_location=object_location)
-            return success
+async def aingest_data(s3_url: str) -> int:
+    return await rag_manager.aingest(s3_url)
 
-    def get_doc_types(self) -> list[str]:
-        return [
-            "APPLE",
-            "Google",
-            "MCTP",
-            "MS",
-            "NVMe",
-            "NVMe-MI",
-            "OCP/2.0",
-            "OCP/2.5",
-            "PCIe",
-        ]
+def ingest_from_backup(backup_dir: str, object_location: str) -> int:
+    return rag_manager.ingest_from_backup(backup_dir, object_location)
+
+def get_doc_types() -> list[str]:
+    return rag_manager.get_doc_types()
