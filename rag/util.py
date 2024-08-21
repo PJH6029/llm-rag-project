@@ -128,8 +128,7 @@ def format_chunks_single_context(chunks: list[Chunk]) -> str:
     
     return _format_combined_chunks(combined_chunks)
 
-# TODO resolve lost in middle problem. Make high score base chunks and additional chunks physically close to each other.
-def format_chunks_hierarchy_context(chunks: list[Chunk]) -> str:
+def format_chunks_hierarchy_context(chunks: list[Chunk], ascending_additional: bool=True) -> str:
     combined_chunks = combine_chunks(chunks)
     context = {
         "base": "",
@@ -143,6 +142,7 @@ def format_chunks_hierarchy_context(chunks: list[Chunk]) -> str:
     context["base"] = _format_combined_chunks(base_chunks)
     
     # additional
+    additional_chunks.sort(key=lambda x: x.doc_max_score, reverse=not ascending_additional) # resolve lost in middle problem
     context["additional"] = _format_combined_chunks(additional_chunks)
     
     context_str = (

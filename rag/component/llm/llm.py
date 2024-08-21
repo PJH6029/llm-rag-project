@@ -27,7 +27,11 @@ def get_model(model_name: str, **kwargs) -> Optional[AnyLanguageModel]:
         
         if provider == "openai":
             from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model=model_name, **kwargs)
+            return ChatOpenAI(model=model_name, **kwargs).with_fallbacks(
+                [
+                    ChatOpenAI(model="gpt-4o-mini", **kwargs),
+                ]
+            )
         elif provider == "anthropic":
             from langchain_anthropic import ChatAnthropic
             return ChatAnthropic(model=model_name, **kwargs)
