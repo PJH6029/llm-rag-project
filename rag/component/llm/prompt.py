@@ -100,7 +100,9 @@ You should answer with the format of the example answer below.
 When you reference the documents, you should provide the exact title of the document.
 Feel free to use markdown to format your answer.
 
-Write the answer in {lang}. Keep proper nouns, requirements IDs, or any other specialized terms as they are.
+Write the answer in {lang}. 
+Keep proper nouns, requirements IDs, or any other specialized terms as they are.
+When you refer to the sentences from the documents, you should provide the exact sentences as they are, so that those be written in the language of the document.
 
 --------------------------------------------------
 **** Example 1 ****
@@ -227,7 +229,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 {query}
 </question>
 
-Answer (in {lang}):
+Answer (in {lang}, but referred sentences to be written in the language of the document):
 """
 generation_with_hierarchy_prompt = ChatPromptTemplate.from_template(generation_with_hierarchy_prompt_template).partial(lang="English")
 
@@ -243,6 +245,7 @@ You should answer with the format of the example answer below.
 Feel free to use markdown to format your answer.
 
 Write the answer in {lang}. Keep proper nouns, requirements IDs, or any other specialized terms as they are.
+When you refer to the sentences from the documents, you should provide the exact sentences as they are, so that those be written in the language of the document.
 
 --------------------------------------------------
 **** Example 1 ****
@@ -362,7 +365,7 @@ While the list of commands in the base document(datacenter-nvme-ssd-specificatio
 {query}
 </question>
 
-Answer (in {lang}):
+Answer (in {lang}, but referred sentences to be written in the language of the document):
 """
 generation_without_hierarchy_prompt = ChatPromptTemplate.from_template(generation_without_hierarchy_prompt_template).partial(lang="English")
 
@@ -374,6 +377,7 @@ Write the response in json format, with the following keys: "verification", "rea
 "reasoning" should be a string that explains the reason for the verification.
 
 Write the reasoning in {lang}. Keep proper nouns, requirements IDs, or any other specialized terms as they are.
+When you refer to the sentences from the documents, you should provide the exact sentences as they are, so that those be written in the language of the document.
 
 Context: {context}
 Answer: {response}

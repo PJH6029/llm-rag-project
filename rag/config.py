@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 
 class LanguageConfig(BaseModel):
     user: str = Field("Korean", description="User language")
-    source: str = Field("Korean", description="Source language")
+    source: str = Field("English", description="Source language")
+    assistant: str = Field("Korean", description="Assistant language")
 
 class GlobalConfig(BaseModel):
     lang: LanguageConfig = LanguageConfig()

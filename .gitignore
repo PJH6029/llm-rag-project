@@ -16,3 +16,5 @@ layout_backup/*
 layout_overlay_backup/*
 layout*/*
 ingestor_logs.txt
+report.md
+doc_img/*

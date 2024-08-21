@@ -20,13 +20,14 @@ class GeneratorManager(BasePipelineManager):
     def set_config(self, config: GenerationConfig):
         self.generator_name = config.model
         use_context_hierarchy = config.global_.context_hierarchy
-        self.user_lang = config.global_.lang.user
+        # self.user_lang = config.global_.lang.user
+        self.assistant_lang = config.global_.lang.assistant
         
         if use_context_hierarchy:
             _prompt = prompt.generation_with_hierarchy_prompt
         else:
             _prompt = prompt.generation_without_hierarchy_prompt
-        self.prompt = _prompt.partial(lang=self.user_lang)
+        self.prompt = _prompt.partial(lang=self.assistant_lang)
         
         msg.info(f"Setting GENERATOR to {self.generator_name}")
 

@@ -2,7 +2,8 @@
     "global": {
         "lang": {
             "user": "Korean",
-            "source": "English"
+            "source": "English",
+            "assistant": "Korean"
         }
     },
     "chat": {
