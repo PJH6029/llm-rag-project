@@ -70,7 +70,7 @@ def write_combined_chunks(combined_chunks: list[CombinedChunks]) -> None:
             except (ValueError, TypeError):
                 msg.warn(f"Page number is not an integer: {chunk.chunk_meta.get('page')}")
                 page = None
-            with st.expander(f"### Chunk {j+1} (page: {page if page else 'N/A'}, score: {chunk.score:.2f})"):
+            with st.expander(f"### Chunk {j+1} (page: {page if page is not None else 'N/A'}, score: {chunk.score:.2f})"):
                 with st.container(height=400):
                     st.markdown(chunk.text)
         

@@ -4,15 +4,13 @@
             "user": "Korean",
             "source": "English",
             "assistant": "Korean"
-        }
+        },
+        "context_hierarchy": true
     },
     "chat": {
 
     },
     "rag": {
-        "global": {
-            "context_hierarchy": true
-        },
         "ingestion": {
             "ingestor": "pinecone-multivector",
             "embeddings": "text-embedding-3-small",

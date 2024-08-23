@@ -29,7 +29,9 @@ def load_config(config_path = "config/config.json") -> dict:
             config = json.load(f)
         rag_config = config.get("rag", {})
         global_config = config.get("global", {})
-        rag_config.get("global", {}).update(global_config)
+        if "global" not in rag_config:
+            rag_config["global"] = {}
+        rag_config["global"].update(global_config)
         return rag_config
     except Exception as e:
         msg.fail(f"Failed to load config: {e}")
@@ -63,6 +65,7 @@ def remove_falsy(
     config: dict,
     falsy_values: dict[Type, list[Any]] = {
         int: [-1],
+        float: [-1.0],
     }
 ) -> dict:
     result = {}
@@ -212,6 +215,24 @@ def _default_metadata_handler(metadata: dict) -> tuple[dict, dict]:
     }
     return doc_meta, chunk_meta
 
+def persistent_metadata_handler(
+    metadata: dict,
+    metadata_ext: str = ".metadata.json",
+) -> tuple[dict, dict]:
+    source = metadata.get("source")
+    if not source:
+        return {}, {}
+    metadata_path = f"{source}{metadata_ext}"
+    
+    try:
+        # load metadata
+        with open(metadata_path, "r") as f:
+            persistent_metadata = json.load(f)
+    except FileNotFoundError:
+        msg.warn(f"Metadata not found: {metadata_path}")
+        persistent_metadata = {}
+    return persistent_metadata, {}
+
 def doc_to_chunk(
     document: Document,
     *,
@@ -322,7 +343,7 @@ def upload_to_s3_with_metadata(
     
     file_object_key = os.path.join(object_location, file_name)
     metadata_object_key = os.path.join(object_location, metadata_file_name)
-
+    
     upload_to_s3(file_path, file_object_key, content_type="application/pdf")
     upload_to_s3(metadata_file_path, metadata_object_key, content_type="application/json")
     return True

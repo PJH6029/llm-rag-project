@@ -26,7 +26,7 @@ class EnsembleRetriever(BaseRAGRetriever):
         top_k: int=5,
         **kwargs
     ) -> None:
-        super().__init__()
+        super().__init__(top_k=top_k, **kwargs)
         self.retrievers = retrievers
         self.weights = weights
         self.c = 60

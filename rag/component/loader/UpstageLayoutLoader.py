@@ -60,6 +60,7 @@ class UpstageLayoutLoader(BaseRAGLoader):
         file_name_with_ext = os.path.basename(self.file_path)
         file_name_without_ext = os.path.splitext(file_name_with_ext)[0]
         
+        # TODO metadata should contain entire data
         if self.cache_to_local:
             msg.info(f"Saving HTML into local: {file_name_without_ext}_{document.metadata.get('page')}.html")
             util.save_to_local(document.page_content, f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html")
@@ -179,6 +180,7 @@ class UpstageLayoutBackupDirLoader(BaseRAGLoader):
         with open(page_file_path, "r") as f:
             content = f.read()
         
+        # TODO redundant?
         metadata_path = f"{page_file_path}{self.metadata_json_ext}"
         if os.path.exists(metadata_path):
             with open(metadata_path, "r") as f:

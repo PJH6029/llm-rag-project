@@ -32,7 +32,10 @@ def init():
     rag_manager.set_config(_config)
 
 init()
-    
+
+def get_config() -> Optional[RAGConfig]:
+    return rag_manager.config
+
 def query(query: str, history: list[ChatLog]=None) -> GenerationResult:
     history = history or []
     with get_openai_callback() as cb:

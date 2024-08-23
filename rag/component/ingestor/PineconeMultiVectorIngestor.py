@@ -157,7 +157,7 @@ class ChunkGenerator:
 
 class PineconeMultiVectorIngestor(BaseRAGIngestor):
     CHILD_INGESTION_CNT: int = 0
-    INGEST_FROM_SCRATCH: bool = True
+    INGEST_FROM_SCRATCH: bool = True # Set to False to skip already ingested chunks
     
     def __init__(
         self,
@@ -203,9 +203,9 @@ class PineconeMultiVectorIngestor(BaseRAGIngestor):
         if not PineconeMultiVectorIngestor.INGEST_FROM_SCRATCH:
             # Filter out already ingested chunks
             filtered_chunks = [c for c in chunks if c.doc_id not in self.ingestion_log or c.chunk_meta.get("page", -1) not in self.ingestion_log[c.doc_id]]
-        if len(filtered_chunks) != len(chunks):
-            msg.warn(f"Skipping {len(chunks) - len(filtered_chunks)} already ingested chunks")
-        chunks = filtered_chunks
+            if len(filtered_chunks) != len(chunks):
+                msg.warn(f"Skipping {len(chunks) - len(filtered_chunks)} already ingested chunks")
+            chunks = filtered_chunks
         
         if len(chunks) == 0:
             msg.warn("No new chunks to ingest")
