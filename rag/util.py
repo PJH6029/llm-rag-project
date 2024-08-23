@@ -215,13 +215,21 @@ def _default_metadata_handler(metadata: dict) -> tuple[dict, dict]:
     }
     return doc_meta, chunk_meta
 
+def object_key_from_s3_url(s3_url: str) -> str:
+    return s3_url.split("//")[1].split("/", 1)[1]
+
 def persistent_metadata_handler(
     metadata: dict,
     metadata_ext: str = ".metadata.json",
+    source_dir: str = "source_documents",
 ) -> tuple[dict, dict]:
     source = metadata.get("source")
     if not source:
         return {}, {}
+    
+    if source.startswith("s3://"):
+        source = f"{source_dir}/{object_key_from_s3_url(source)}"
+    
     metadata_path = f"{source}{metadata_ext}"
     
     try:

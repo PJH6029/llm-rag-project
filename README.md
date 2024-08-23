@@ -71,7 +71,15 @@
 > Run `python ingest.py -h` for further information
 
 ### Upstage Ingestion Guide
-`python ingest.py -l upstage_layout -s [source_dir] -b [backup_dir] -a`
+`python ingest.py -l upstage_layout -s [source_dir] -b [backup_dir] -a -d`
+
+```
+-l: loader 종류. upstage_layout or upstage_backup or pypdf
+-s: source directory
+-b: backup directory
+-a: all. 설정하면, download 시(-d가 enabled), S3에서 모든 파일을 다운로드. Layout analyze 시 모든 파일을 다시 analyze함
+-d: download. 설정하면, 설정한 source directory로 S3에서 파일을 다운로드
+```
 
 1. Set `UPSTAGE_API_KEY`
 2. Prepare source documents
@@ -101,3 +109,17 @@
 
 # 주의 사항
 - Default PyPDFLoader를 사용하게 되면 (loader name: `pypdf`), doc_id에 local path가 그대로 들어가게 됨 (ex. `/home/fadu/prj/source_documents/major.pdf`)
+
+# Summary
+## Cold Start
+1. `python ingest.py -l upstage_layout -a -d` (S3에서 전체 문서 download -> 전체 문서를 텍스트로 변환 -> Pinecone에 insert)
+2. `streamlit run chat.py`
+
+## Cold Start 도중 오류 발생 시 (재시작)
+1. `python ingest.py -l upstage_loader` (`upstage_loadr`가 backup된 markdown 문서가 있는지 확인 후, 이미 parse한 markdown 문서들 우선 ingest)
+2. `python ingest.py -l upstage_backup` (paging issue로 인해 parse됐지만 ingest가 안된 소수의 페이지가 남아있을 수 있음. 해당 문서들 확인 후 ingest)
+
+## 특정 문서 추가 시
+1. S3에 `.pdf`와 `.metadata.json` 업로드
+2. `python ingest.py -l upstage_layout -d` (S3에서 추가 문서 download -> 추가 문서를 텍스트로 변환 -> Pinecone에 insert)
+3. `streamlit run chat.py`

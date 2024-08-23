@@ -16,3 +16,4 @@ pinecone-client
 pinecone-text
 matplotlib
 markdownify
+PyPDF2

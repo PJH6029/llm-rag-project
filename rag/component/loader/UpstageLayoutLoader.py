@@ -27,6 +27,7 @@ class UpstageLayoutLoader(BaseRAGLoader):
         backup_dir: str = "./layout_backup",
         source_type: Literal["path", "name"] = "path",
         metadata_ext: str = ".metadata.json",
+        force_load: bool = False,
         *,
         metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None,
     ) -> None:
@@ -36,10 +37,41 @@ class UpstageLayoutLoader(BaseRAGLoader):
         
         self.source = self.file_path if source_type == "path" else self.file_name
         
-        # to implement element overlap, split by element
-        self.layout_loader = UpstageLayoutAnalysisLoader(
-            file_path, output_type=anlaysis_output_type, split="element" if overlap_elem_size > 0 else "page", use_ocr=use_ocr
-        )
+        # if backup file exists, use backup file instead
+        self.layout_loader = None
+        
+        from PyPDF2 import PdfReader
+        total_pages = len(PdfReader(file_path).pages)
+        file_name_without_ext = os.path.splitext(os.path.basename(file_path))[0]
+        if to_markdown:
+            backup_file_parent_dir_path = f"{backup_dir}/markdown/{file_name_without_ext}"
+        else:
+            backup_file_parent_dir_path = f"{backup_dir}/html/{file_name_without_ext}"
+        max_page = -1
+        if os.path.exists(backup_file_parent_dir_path):
+            for file in os.listdir(backup_file_parent_dir_path):
+                if not file.endswith(".html") and not file.endswith(".md"):
+                    continue
+                file_name = os.path.splitext(os.path.basename(file))[0]
+                page = int(file_name.split("_")[-1])
+                max_page = max(max_page, page)
+            
+            if max_page >= total_pages:
+                # backup file exists
+                msg.info(f"Backup file found: {backup_file_parent_dir_path}. Use backup file instead.")
+                self.layout_loader = UpstageLayoutBackupLoader(
+                    backup_file_parent_dir_path, metadata_handler=self.metadata_handler, metadata_ext=metadata_ext
+                )
+            else:
+                # backup file exists, but not all pages are backed up
+                msg.info(f"Backup file found: {backup_file_parent_dir_path}. But not all pages are backed up.")
+
+        if self.layout_loader is None or force_load:
+            # to implement element overlap, split by element
+            self.layout_loader = UpstageLayoutAnalysisLoader(
+                file_path, output_type=anlaysis_output_type, split="element" if overlap_elem_size > 0 else "page", use_ocr=use_ocr
+            )
+        
         self.to_markdown = to_markdown
         self.cache_to_local = cache_to_local
         self.overlap_elem_size = overlap_elem_size
@@ -60,11 +92,16 @@ class UpstageLayoutLoader(BaseRAGLoader):
         file_name_with_ext = os.path.basename(self.file_path)
         file_name_without_ext = os.path.splitext(file_name_with_ext)[0]
         
-        # TODO metadata should contain entire data
+        # TODO expand to general metadata handler
+        metadata_to_dump = document.metadata.copy()
+        metadata_to_dump["source"] = self.source
+        persistent_metadata = util.persistent_metadata_handler(metadata_to_dump)[0]
+        metadata_to_dump.update(persistent_metadata)
+        
         if self.cache_to_local:
             msg.info(f"Saving HTML into local: {file_name_without_ext}_{document.metadata.get('page')}.html")
             util.save_to_local(document.page_content, f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html")
-            util.save_to_local(json.dumps(document.metadata), f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html{self.metadata_ext}")
+            util.save_to_local(json.dumps(metadata_to_dump), f"{self.backup_dir}/html/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.html{self.metadata_ext}")
                 
         if self.to_markdown:
             document.page_content = util.markdownify(document.page_content)
@@ -72,7 +109,7 @@ class UpstageLayoutLoader(BaseRAGLoader):
             if self.cache_to_local:
                 msg.info(f"Saving Markdown into local: {file_name_without_ext}_{document.metadata.get('page')}.md")
                 util.save_to_local(document.page_content, f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md")
-                util.save_to_local(json.dumps(document.metadata), f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md{self.metadata_ext}")
+                util.save_to_local(json.dumps(metadata_to_dump), f"{self.backup_dir}/markdown/{file_name_without_ext}/{file_name_without_ext}_{document.metadata.get('page')}.md{self.metadata_ext}")
         
         document.metadata["source"] = self.source
         
@@ -138,36 +175,18 @@ class UpstageLayoutLoader(BaseRAGLoader):
         metadata["page"] = page
         
         return Document(page_content=page_content, metadata=metadata)
-    
-class UpstageLayoutBackupDirLoader(BaseRAGLoader):
+
+class UpstageLayoutBackupLoader(BaseRAGLoader):
     def __init__(
-        self, 
-        backup_dir: str,
-        metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None, 
+        self,
+        backup_file_path: str,
+        metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None,
         metadata_ext: str = ".metadata.json",
     ) -> None:
         super().__init__(metadata_handler)
         self.metadata_json_ext = metadata_ext
-        self.backup_dir = backup_dir
-        
-        html_dir = f"{backup_dir}/html"
-        md_dir = f"{backup_dir}/markdown"
-        
-        if os.path.exists(md_dir):
-            self.data_source_dir = md_dir
-            self.data_source_ext = ".md"
-        else:
-            self.data_source_dir = html_dir
-            self.data_source_ext = "."
-            
-    def lazy_load(self) -> Iterator[Document]:
-        for root, _, files in os.walk(self.data_source_dir):
-            for file in files:
-                if not file.endswith(self.data_source_ext):
-                    continue
-                file_path = os.path.join(root, file)
-                yield self._doc_from_backup_page(file_path)
-        
+        self.backup_file_path = backup_file_path
+    
     def _doc_from_backup_page(self, page_file_path: str) -> Document:
         file_name = os.path.basename(page_file_path)
         file_name_without_ext = os.path.splitext(file_name)[0]
@@ -198,3 +217,36 @@ class UpstageLayoutBackupDirLoader(BaseRAGLoader):
         )
         
         return document
+    
+    def lazy_load(self) -> Iterator[Document]:
+        for file in os.listdir(self.backup_file_path):
+            if file.endswith(".html") or file.endswith(".md"):
+                yield self._doc_from_backup_page(f"{self.backup_file_path}/{file}")
+
+class UpstageLayoutBackupDirLoader(BaseRAGLoader):
+    def __init__(
+        self, 
+        backup_dir: str,
+        metadata_handler: Optional[Callable[[dict], tuple[dict, dict]]] = None, 
+        metadata_ext: str = ".metadata.json",
+    ) -> None:
+        super().__init__(metadata_handler)
+        self.metadata_json_ext = metadata_ext
+        self.backup_dir = backup_dir
+        
+        html_dir = f"{backup_dir}/html"
+        md_dir = f"{backup_dir}/markdown"
+        
+        if os.path.exists(md_dir):
+            self.data_source_dir = md_dir
+            self.data_source_ext = ".md"
+        else:
+            self.data_source_dir = html_dir
+            self.data_source_ext = ".html"
+            
+    def lazy_load(self) -> Iterator[Document]:
+        for root, _, files in os.walk(self.data_source_dir):
+            # if one of files contains the data source extension, iterate roo
+            if any(file.endswith(self.data_source_ext) for file in files):
+                loader = UpstageLayoutBackupLoader(root, metadata_handler=self.metadata_handler, metadata_ext=self.metadata_json_ext)
+                yield from loader.lazy_load()
