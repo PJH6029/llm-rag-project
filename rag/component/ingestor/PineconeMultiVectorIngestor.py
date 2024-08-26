@@ -185,6 +185,8 @@ class PineconeMultiVectorIngestor(BaseRAGIngestor):
         if os.path.exists(ingestion_log_path):
             with open(ingestion_log_path, "r") as f:
                 for line in f:
+                    if not line.strip():
+                        continue
                     doc_id, page = line.strip().split(",")
                     if doc_id not in self.ingestion_log:
                         self.ingestion_log[doc_id] = set()
@@ -202,7 +204,7 @@ class PineconeMultiVectorIngestor(BaseRAGIngestor):
         
         if not PineconeMultiVectorIngestor.INGEST_FROM_SCRATCH:
             # Filter out already ingested chunks
-            filtered_chunks = [c for c in chunks if c.doc_id not in self.ingestion_log or c.chunk_meta.get("page", -1) not in self.ingestion_log[c.doc_id]]
+            filtered_chunks = [c for c in chunks if c.doc_id not in self.ingestion_log or c.chunk_meta.get("page") not in self.ingestion_log[c.doc_id]]
             if len(filtered_chunks) != len(chunks):
                 msg.warn(f"Skipping {len(chunks) - len(filtered_chunks)} already ingested chunks")
             chunks = filtered_chunks
@@ -235,13 +237,14 @@ class PineconeMultiVectorIngestor(BaseRAGIngestor):
         # print(f"Ingested chunks:")
         logs = ""
         for c in chunks:
-            log = f"{c.doc_id},{c.chunk_meta.get('page', -1)}\n"
-            # print(log, end="")
-            logs += log
+            if c.chunk_meta.get("page") is None:
+                msg.warn(f"Page number not found for chunk {c.chunk_id}. Skipping logging...")
+                continue
+            logs += f"{c.doc_id},{c.chunk_meta['page']}\n"
             
             if c.doc_id not in self.ingestion_log:
                 self.ingestion_log[c.doc_id] = set()
-            self.ingestion_log[c.doc_id].add(c.chunk_meta.get("page", -1))
+            self.ingestion_log[c.doc_id].add(c.chunk_meta["page"])
         with open("ingestor_logs.txt", "a") as f:
             f.write(logs)
         

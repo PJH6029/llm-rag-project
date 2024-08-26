@@ -15,8 +15,8 @@ evaluate/reference/*
 layout_backup/*
 layout_overlay_backup/*
 layout*/*
-ingestor_logs.txt
+ingestor_logs*.txt
 report.md
 doc_img/*
 source_documents/*
-backup/*
+backup*/*

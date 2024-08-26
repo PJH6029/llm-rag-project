@@ -14,6 +14,21 @@ from rag.component.loader.base import BaseRAGLoader
 from rag.type import *
 from rag import util
 
+def get_total_pages(file_path: str) -> int:
+    from PyPDF2 import PdfReader
+    return len(PdfReader(file_path).pages)
+
+def get_max_page_from_backup(backup_dir: str) -> int:
+    max_page = -1
+    for file in os.listdir(backup_dir):
+        if not file.endswith(".html") and not file.endswith(".md"):
+            continue
+        file_name_without_ext = os.path.splitext(file)[0]
+        page = int(file_name_without_ext.split("_")[-1])
+        max_page = max(max_page, page)
+    return max_page
+
+# TODO load partial pages from backup, and the rest from analysis
 class UpstageLayoutLoader(BaseRAGLoader):
     def __init__(
         self,
@@ -39,23 +54,17 @@ class UpstageLayoutLoader(BaseRAGLoader):
         
         # if backup file exists, use backup file instead
         self.layout_loader = None
-        
-        from PyPDF2 import PdfReader
-        total_pages = len(PdfReader(file_path).pages)
+
         file_name_without_ext = os.path.splitext(os.path.basename(file_path))[0]
         if to_markdown:
             backup_file_parent_dir_path = f"{backup_dir}/markdown/{file_name_without_ext}"
         else:
             backup_file_parent_dir_path = f"{backup_dir}/html/{file_name_without_ext}"
+    
         max_page = -1
+        total_pages = get_total_pages(file_path)
         if os.path.exists(backup_file_parent_dir_path):
-            for file in os.listdir(backup_file_parent_dir_path):
-                if not file.endswith(".html") and not file.endswith(".md"):
-                    continue
-                file_name = os.path.splitext(os.path.basename(file))[0]
-                page = int(file_name.split("_")[-1])
-                max_page = max(max_page, page)
-            
+            max_page = get_max_page_from_backup(backup_file_parent_dir_path)
             if max_page >= total_pages:
                 # backup file exists
                 msg.info(f"Backup file found: {backup_file_parent_dir_path}. Use backup file instead.")
@@ -71,9 +80,11 @@ class UpstageLayoutLoader(BaseRAGLoader):
             self.layout_loader = UpstageLayoutAnalysisLoader(
                 file_path, output_type=anlaysis_output_type, split="element" if overlap_elem_size > 0 else "page", use_ocr=use_ocr
             )
+        # save to local only if layout loader is UpstageLayoutAnalysisLoader
+        print(f"Use layout loader {self.layout_loader.__class__.__name__}")
+        self.cache_to_local = cache_to_local & isinstance(self.layout_loader, UpstageLayoutAnalysisLoader)
         
         self.to_markdown = to_markdown
-        self.cache_to_local = cache_to_local
         self.overlap_elem_size = overlap_elem_size
         self.backup_dir = backup_dir
         self.metadata_ext = metadata_ext
@@ -117,7 +128,9 @@ class UpstageLayoutLoader(BaseRAGLoader):
     
     def _lazy_load_overlap(self) -> Iterator[Document]:
         pprev_page_group = []
+        pprev_page = None
         prev_page_group = []
+        prev_page = None
         current_page_group = []
         current_page = None
         first_trial = True
@@ -138,11 +151,13 @@ class UpstageLayoutLoader(BaseRAGLoader):
                     first_trial = False
                 else:
                     combined_elems = pprev_page_group[-self.overlap_elem_size:] + prev_page_group + current_page_group[:self.overlap_elem_size]
-                    merged_doc = self._merge_elems(combined_elems, current_page - 1)
+                    merged_doc = self._merge_elems(combined_elems, prev_page)
                     yield self._process(merged_doc)
                     
                 pprev_page_group = prev_page_group
+                pprev_page = prev_page
                 prev_page_group = current_page_group
+                prev_page = current_page
                 current_page_group = []
             
             current_page_group.append(elem_doc)
@@ -192,6 +207,10 @@ class UpstageLayoutBackupLoader(BaseRAGLoader):
         file_name_without_ext = os.path.splitext(file_name)[0]
         
         page = int(file_name_without_ext.split("_")[-1])
+        if page <= 0:
+            msg.warn(f"Page from file path {page_file_path} is less than 1: {page}.")
+            raise ValueError(f"Page from file path {page_file_path} is less than 1: {page}.")
+        
         pdf_file_name = "_".join(file_name_without_ext.split("_")[:-1]) + ".pdf"
         
         doc_id = pdf_file_name
@@ -215,11 +234,14 @@ class UpstageLayoutBackupLoader(BaseRAGLoader):
                 **metadata
             }
         )
-        
+
         return document
     
     def lazy_load(self) -> Iterator[Document]:
-        for file in os.listdir(self.backup_file_path):
+        files = filter(lambda file: file.endswith(".html") or file.endswith(".md"), os.listdir(self.backup_file_path))
+        page_extractor = lambda file: int(os.path.splitext(file)[0].split("_")[-1])
+        for file in sorted(files, key=page_extractor):
+        # for file in os.listdir(self.backup_file_path):
             if file.endswith(".html") or file.endswith(".md"):
                 yield self._doc_from_backup_page(f"{self.backup_file_path}/{file}")
 

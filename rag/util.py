@@ -204,7 +204,7 @@ def _default_metadata_handler(metadata: dict) -> tuple[dict, dict]:
     elif doc_source is None:
         doc_source = doc_id
     
-    page = metadata.pop("page", -1)
+    page = metadata.pop("page")
     doc_meta = {
         **metadata,
         "doc_id": doc_id,
@@ -399,22 +399,28 @@ def execute_as_batch(
     iterable: Iterable[Any], 
     batch_size: int = 10,
     func: Optional[Callable[[list[Any]], Any]] = None,
-) -> int:
+    cnt_func: bool = True,
+) -> Optional[int]:
     batch = []
     item_cnt = 0
+    res_cnt = 0
     for item in iterable:
         batch.append(item)
         item_cnt += 1
         if len(batch) == batch_size:
             if func:
-                func(batch)
+                res = func(batch)
+                if res is not None and cnt_func:
+                    res_cnt += res
             batch = []
     
     if batch:
         if func:
             func(batch)
-    
-    return item_cnt
+    if cnt_func:
+        return res_cnt
+    else:
+        return item_cnt
 
 class MetadataSearch:
     @staticmethod

@@ -61,7 +61,7 @@ persistent_metadata_handler = lambda metadata: util.persistent_metadata_handler(
 def _ingest(loader: BaseLoader):
     cnt = ingest_data(
         loader=loader,
-        batch_size=5,
+        batch_size=10,
     )
     print(f"{cnt} chunks ingested")
     

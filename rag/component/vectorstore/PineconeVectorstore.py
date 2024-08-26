@@ -12,6 +12,11 @@ from rag.component.vectorstore.base import BaseRAGVectorstore
 from rag.type import Chunk, Embeddings
 from rag import util
 
+def validate_chunks(chunks: list[Chunk]) -> None:
+    for chunk in chunks:
+        if "page" in chunk.chunk_meta and chunk.chunk_meta["page"] <= 0:
+            raise ValueError("page number must be greater than 0")
+
 class PineconeVectorstore(BaseRAGVectorstore):
     def __init__(
         self, 
@@ -34,6 +39,7 @@ class PineconeVectorstore(BaseRAGVectorstore):
         self.index_name = os.environ["PINECONE_INDEX_NAME"]
         
     def ingest(self, chunks: list[Chunk]) -> int:
+        validate_chunks(chunks)
         docs = [chunk.to_document() for chunk in chunks]
         
         for doc in docs:

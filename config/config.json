@@ -14,8 +14,8 @@
         "ingestion": {
             "ingestor": "pinecone-multivector",
             "embeddings": "text-embedding-3-small",
-            "namespace": "parent-final",
-            "sub_namespace": "child-final"
+            "namespace": "parent",
+            "sub_namespace": "child"
         },
         "transformation": {
             "model": "gpt-4o-mini",
@@ -28,8 +28,8 @@
         },
         "retrieval": {
             "retriever": ["pinecone-multivector"],
-            "namespace": "parent-final",
-            "sub_namespace": "child-final",
+            "namespace": "parent",
+            "sub_namespace": "child",
             "embeddings": "text-embedding-3-small",
             "top_k": 6
         },
